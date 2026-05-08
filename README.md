@@ -6,7 +6,7 @@ Deploy-to-LLM-spend causal attribution.
 
 `llmtrace` is a self-hosted reverse proxy for LLM provider APIs (Anthropic, OpenAI, Bedrock) with a built-in cost ledger, latency tracking, and anomaly detection. It joins LLM spend anomalies to the deploy events that caused them — using the same architectural pattern as [costtrace](https://github.com/Yatsuiii/costtrace) does for AWS spend.
 
-**Status: scaffolding.** See `CLAUDE.md` (gitignored) for the project thesis. Tracking issues against the 3-week MVP scope.
+**Status: scaffolding.** Tracking issues against the 3-week MVP scope.
 
 ## How it works (planned)
 

@@ -161,5 +161,5 @@ func cmdReport() *cobra.Command {
 }
 
 func notImplemented(name string) error {
-	return fmt.Errorf("%s: not implemented yet — see CLAUDE.md for the 3-week scope", name)
+	return fmt.Errorf("%s: not implemented yet", name)
 }

@@ -1,10 +1,17 @@
 package main
 
 import (
+	"context"
 	"fmt"
 	"os"
+	"time"
 
 	"github.com/spf13/cobra"
+
+	"github.com/Yatsuiii/llmtrace/internal/detect"
+	"github.com/Yatsuiii/llmtrace/internal/seed"
+	"github.com/Yatsuiii/llmtrace/internal/storage"
+	"github.com/Yatsuiii/llmtrace/internal/web"
 )
 
 func main() {
@@ -22,10 +29,65 @@ func main() {
 		cmdAnalyze(),
 		cmdExplain(),
 		cmdReport(),
+		cmdSeed(),
 	)
 	if err := root.Execute(); err != nil {
 		os.Exit(1)
 	}
+}
+
+func cmdSeed() *cobra.Command {
+	var path string
+	cmd := &cobra.Command{
+		Use:   "seed",
+		Short: "Plant the demo scenario into the ledger (wipes existing data)",
+		RunE: func(cmd *cobra.Command, args []string) error {
+			ctx := context.Background()
+			db, err := storage.Open(path)
+			if err != nil {
+				return err
+			}
+			defer db.Close()
+			n, err := seed.Run(ctx, db)
+			if err != nil {
+				return err
+			}
+			fmt.Printf("seeded %d calls into %s\n", n, path)
+			since := time.Date(2026, 4, 11, 0, 0, 0, 0, time.UTC)
+			daily, err := db.DailyCostByKey(ctx, since)
+			if err != nil {
+				return err
+			}
+			summary := map[string]struct{ pre, post float64 }{}
+			deployDay := "2026-05-03"
+			for _, d := range daily {
+				s := summary[d.APIKeyID]
+				if d.Date < deployDay {
+					s.pre += d.CostUSD
+				} else {
+					s.post += d.CostUSD
+				}
+				summary[d.APIKeyID] = s
+			}
+			preDays := 22.0
+			postDays := 8.0
+			fmt.Println()
+			fmt.Println("per-key cost (avg $/day):")
+			fmt.Printf("  %-18s  %-10s  %-10s  %-10s\n", "key", "pre", "post", "ratio")
+			for k, s := range summary {
+				pre := s.pre / preDays
+				post := s.post / postDays
+				ratio := 0.0
+				if pre > 0 {
+					ratio = post / pre
+				}
+				fmt.Printf("  %-18s  $%-9.2f  $%-9.2f  %.2fx\n", k, pre, post, ratio)
+			}
+			return nil
+		},
+	}
+	cmd.Flags().StringVar(&path, "db", "llmtrace.db", "path to SQLite ledger")
+	return cmd
 }
 
 func cmdInit() *cobra.Command {
@@ -40,14 +102,22 @@ func cmdInit() *cobra.Command {
 
 func cmdServe() *cobra.Command {
 	var port int
+	var dbPath string
 	cmd := &cobra.Command{
 		Use:   "serve",
-		Short: "Run the proxy server",
+		Short: "Run the dashboard server",
 		RunE: func(cmd *cobra.Command, args []string) error {
-			return notImplemented("serve")
+			ctx := context.Background()
+			db, err := storage.Open(dbPath)
+			if err != nil {
+				return err
+			}
+			defer db.Close()
+			return web.Serve(ctx, db, port)
 		},
 	}
 	cmd.Flags().IntVar(&port, "port", 8080, "listen port")
+	cmd.Flags().StringVar(&dbPath, "db", "llmtrace.db", "path to SQLite ledger")
 	return cmd
 }
 
@@ -108,16 +178,36 @@ func cmdTail() *cobra.Command {
 
 func cmdAnomalies() *cobra.Command {
 	var days int
-	var format string
+	var dbPath string
 	cmd := &cobra.Command{
 		Use:   "anomalies",
-		Short: "List spend/latency anomalies",
+		Short: "Detect and list spend anomalies",
 		RunE: func(cmd *cobra.Command, args []string) error {
-			return notImplemented("anomalies")
+			ctx := context.Background()
+			db, err := storage.Open(dbPath)
+			if err != nil {
+				return err
+			}
+			defer db.Close()
+			since := time.Now().UTC().AddDate(0, 0, -days)
+			cfg := detect.DefaultConfig()
+			anomalies, err := detect.Run(ctx, db, cfg, since)
+			if err != nil {
+				return err
+			}
+			if len(anomalies) == 0 {
+				fmt.Println("no anomalies detected")
+				return nil
+			}
+			for _, a := range anomalies {
+				fmt.Printf("ANOMALY  key:%-18s  date:%s  actual:$%.2f  baseline:$%.2f  delta:+$%.2f  %.1fσ\n",
+					a.APIKeyID, a.Date, a.ActualValue, a.BaselineValue, a.Delta, a.Sigma)
+			}
+			return nil
 		},
 	}
-	cmd.Flags().IntVar(&days, "days", 30, "window to scan for anomalies")
-	cmd.Flags().StringVar(&format, "format", "text", "output format: text | markdown")
+	cmd.Flags().IntVar(&days, "days", 30, "window to scan")
+	cmd.Flags().StringVar(&dbPath, "db", "llmtrace.db", "path to SQLite ledger")
 	return cmd
 }
 

@@ -7,8 +7,8 @@ type ModelRate struct {
 
 var rates = map[string]ModelRate{
 	// Anthropic — placeholder, refresh against official docs before shipping
-	"claude-opus-4-7":          {InputPerMillion: 15.00, OutputPerMillion: 75.00},
-	"claude-sonnet-4-6":        {InputPerMillion: 3.00, OutputPerMillion: 15.00},
+	"claude-opus-4-7":           {InputPerMillion: 15.00, OutputPerMillion: 75.00},
+	"claude-sonnet-4-6":         {InputPerMillion: 3.00, OutputPerMillion: 15.00},
 	"claude-haiku-4-5-20251001": {InputPerMillion: 0.80, OutputPerMillion: 4.00},
 }
 

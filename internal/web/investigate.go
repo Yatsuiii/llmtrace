@@ -3,14 +3,14 @@ package web
 import (
 	"fmt"
 	"net/http"
+	"os"
 	"strconv"
 	"time"
 
+	"github.com/Yatsuiii/llmtrace/internal/agent"
 	"github.com/Yatsuiii/llmtrace/internal/storage"
 )
 
-// investigateHandler streams a placeholder agent investigation for a given
-// anomaly ID. The real Gemini agent loop replaces the placeholder on Day 3.
 func investigateHandler(db *storage.DB) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		idStr := r.URL.Query().Get("id")
@@ -39,6 +39,19 @@ func investigateHandler(db *storage.DB) http.HandlerFunc {
 			return
 		}
 
+		apiKey := os.Getenv("GEMINI_API_KEY")
+		if apiKey == "" {
+			http.Error(w, "GEMINI_API_KEY not set", http.StatusServiceUnavailable)
+			return
+		}
+		model := os.Getenv("GEMINI_MODEL")
+
+		inv, err := agent.New(db, apiKey, model)
+		if err != nil {
+			http.Error(w, fmt.Sprintf("init agent: %v", err), http.StatusInternalServerError)
+			return
+		}
+
 		w.Header().Set("Content-Type", "text/event-stream")
 		w.Header().Set("Cache-Control", "no-cache")
 		w.Header().Set("X-Accel-Buffering", "no")
@@ -47,16 +60,10 @@ func investigateHandler(db *storage.DB) http.HandlerFunc {
 		emit := func(msg string) {
 			fmt.Fprintf(w, "data: %s\n\n", msg)
 			flusher.Flush()
-			time.Sleep(60 * time.Millisecond)
 		}
 
-		emit(fmt.Sprintf("🔍 Investigating anomaly #%d for key '%s' on %s", id, target.APIKeyID, target.Date))
-		emit(fmt.Sprintf("   actual: $%.2f  baseline: $%.2f  delta: +$%.2f  (%.1fσ)", target.ActualValue, target.BaselineValue, target.Delta, target.Sigma))
-		emit("")
-		emit("⚙  [agent] querying ledger for model distribution around anomaly date…")
-		emit("   [placeholder — Gemini agent loop wires in on Day 3]")
-		emit("")
-		emit("📋 Attribution: agent not yet connected.")
-		emit("   Run: go run ./cmd/llmtrace serve  after Day 3 to see full reasoning.")
+		if err := inv.Investigate(ctx, *target, emit); err != nil {
+			emit(fmt.Sprintf("[error] %v", err))
+		}
 	}
 }

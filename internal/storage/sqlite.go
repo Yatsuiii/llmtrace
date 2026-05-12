@@ -181,6 +181,104 @@ func (db *DB) ListAnomalies(ctx context.Context, since time.Time) ([]AnomalyRow,
 	return out, rows.Err()
 }
 
+// ModelDistribution returns per-model call counts, costs, and top prompt hashes
+// for a given key and date window. Used by the agent investigation tools.
+func (db *DB) ModelDistribution(ctx context.Context, apiKeyID string, start, end time.Time) ([]ModelDistributionRow, error) {
+	rows, err := db.conn.QueryContext(ctx,
+		`SELECT model, prompt_hash, COUNT(*) AS calls, SUM(cost_usd) AS cost_usd
+		 FROM calls
+		 WHERE api_key_id = ? AND timestamp >= ? AND timestamp < ?
+		 GROUP BY model, prompt_hash
+		 ORDER BY calls DESC`,
+		apiKeyID, start.UnixMilli(), end.UnixMilli(),
+	)
+	if err != nil {
+		return nil, fmt.Errorf("model distribution: %w", err)
+	}
+	defer rows.Close()
+	var out []ModelDistributionRow
+	for rows.Next() {
+		var r ModelDistributionRow
+		if err := rows.Scan(&r.Model, &r.PromptHash, &r.Calls, &r.CostUSD); err != nil {
+			return nil, fmt.Errorf("scan distribution: %w", err)
+		}
+		out = append(out, r)
+	}
+	return out, rows.Err()
+}
+
+type ModelDistributionRow struct {
+	Model      string
+	PromptHash string
+	Calls      int64
+	CostUSD    float64
+}
+
+func (db *DB) DeploysInWindow(ctx context.Context, start, end time.Time) ([]DeployRow, error) {
+	rows, err := db.conn.QueryContext(ctx,
+		`SELECT id, repo, branch, commit_sha, pr_number, title, started_at, completed_at, status
+		 FROM deploys
+		 WHERE started_at >= ? AND started_at <= ?
+		 ORDER BY started_at`,
+		start.UnixMilli(), end.UnixMilli(),
+	)
+	if err != nil {
+		return nil, fmt.Errorf("deploys in window: %w", err)
+	}
+	defer rows.Close()
+	var out []DeployRow
+	for rows.Next() {
+		var d DeployRow
+		var startedMs, completedMs int64
+		if err := rows.Scan(&d.ID, &d.Repo, &d.Branch, &d.CommitSHA, &d.PRNumber,
+			&d.Title, &startedMs, &completedMs, &d.Status); err != nil {
+			return nil, fmt.Errorf("scan deploy: %w", err)
+		}
+		d.StartedAt = time.UnixMilli(startedMs).UTC()
+		d.CompletedAt = time.UnixMilli(completedMs).UTC()
+		out = append(out, d)
+	}
+	return out, rows.Err()
+}
+
+type PromptModelMixRow struct {
+	Model  string
+	Calls  int64
+	Period string // "before" | "after"
+}
+
+func (db *DB) PromptModelMix(ctx context.Context, promptHash string, pivot time.Time, window time.Duration) ([]PromptModelMixRow, error) {
+	beforeStart := pivot.Add(-window)
+	afterEnd := pivot.Add(window)
+	rows, err := db.conn.QueryContext(ctx,
+		`SELECT model, COUNT(*) AS calls, 'before' AS period
+		 FROM calls
+		 WHERE prompt_hash = ? AND timestamp >= ? AND timestamp < ?
+		 GROUP BY model
+		 UNION ALL
+		 SELECT model, COUNT(*) AS calls, 'after' AS period
+		 FROM calls
+		 WHERE prompt_hash = ? AND timestamp >= ? AND timestamp < ?
+		 GROUP BY model
+		 ORDER BY period DESC, calls DESC`,
+		promptHash, beforeStart.UnixMilli(), pivot.UnixMilli(),
+		promptHash, pivot.UnixMilli(), afterEnd.UnixMilli(),
+	)
+	if err != nil {
+		return nil, fmt.Errorf("prompt model mix: %w", err)
+	}
+	defer rows.Close()
+	var out []PromptModelMixRow
+	for rows.Next() {
+		var r PromptModelMixRow
+		if err := rows.Scan(&r.Model, &r.Calls, &r.Period); err != nil {
+			return nil, fmt.Errorf("scan mix: %w", err)
+		}
+		out = append(out, r)
+	}
+	return out, rows.Err()
+}
+
 func (db *DB) CountCalls(ctx context.Context) (int64, error) {
 	var n int64
 	if err := db.conn.QueryRowContext(ctx, "SELECT COUNT(*) FROM calls").Scan(&n); err != nil {

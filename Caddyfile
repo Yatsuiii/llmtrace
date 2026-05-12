@@ -1,0 +1,10 @@
+# Option A — you have a domain (Caddy auto-provisions TLS):
+#   Replace :80 with your domain, e.g.:  llmtrace.yourdomain.com
+#
+# Option B — Vultr IP only, no domain:
+#   Keep :80 as-is. Access via http://YOUR_VULTR_IP
+#   (lablab.ai accepts plain HTTP demo URLs)
+
+:80 {
+    reverse_proxy llmtrace:8080
+}

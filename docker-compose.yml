@@ -1,0 +1,29 @@
+services:
+  llmtrace:
+    build: .
+    volumes:
+      - data:/data
+    environment:
+      - GEMINI_API_KEY=${GEMINI_API_KEY}
+      - GEMINI_MODEL=${GEMINI_MODEL:-gemini-2.5-flash}
+    restart: unless-stopped
+    expose:
+      - "8080"
+
+  caddy:
+    image: caddy:alpine
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy_data:/data
+      - caddy_config:/config
+    depends_on:
+      - llmtrace
+    restart: unless-stopped
+
+volumes:
+  data:
+  caddy_data:
+  caddy_config:

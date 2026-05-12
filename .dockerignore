@@ -1,0 +1,9 @@
+llmtrace
+*.db
+*.db-journal
+*.db-wal
+*.db-shm
+.git
+.env
+.envrc
+CLAUDE.md

@@ -279,6 +279,31 @@ func (db *DB) PromptModelMix(ctx context.Context, promptHash string, pivot time.
 	return out, rows.Err()
 }
 
+func (db *DB) ListDeploys(ctx context.Context, since time.Time) ([]DeployRow, error) {
+	rows, err := db.conn.QueryContext(ctx,
+		`SELECT id, repo, branch, commit_sha, pr_number, title, started_at, completed_at, status
+		 FROM deploys WHERE started_at >= ? ORDER BY started_at`,
+		since.UnixMilli(),
+	)
+	if err != nil {
+		return nil, fmt.Errorf("list deploys: %w", err)
+	}
+	defer rows.Close()
+	var out []DeployRow
+	for rows.Next() {
+		var d DeployRow
+		var startedMs, completedMs int64
+		if err := rows.Scan(&d.ID, &d.Repo, &d.Branch, &d.CommitSHA, &d.PRNumber,
+			&d.Title, &startedMs, &completedMs, &d.Status); err != nil {
+			return nil, fmt.Errorf("scan deploy: %w", err)
+		}
+		d.StartedAt = time.UnixMilli(startedMs).UTC()
+		d.CompletedAt = time.UnixMilli(completedMs).UTC()
+		out = append(out, d)
+	}
+	return out, rows.Err()
+}
+
 func (db *DB) CountCalls(ctx context.Context) (int64, error) {
 	var n int64
 	if err := db.conn.QueryRowContext(ctx, "SELECT COUNT(*) FROM calls").Scan(&n); err != nil {

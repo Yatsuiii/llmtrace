@@ -8,6 +8,7 @@ import (
 
 	"github.com/spf13/cobra"
 
+	"github.com/Yatsuiii/llmtrace/internal/agent"
 	"github.com/Yatsuiii/llmtrace/internal/detect"
 	"github.com/Yatsuiii/llmtrace/internal/seed"
 	"github.com/Yatsuiii/llmtrace/internal/storage"
@@ -213,14 +214,59 @@ func cmdAnomalies() *cobra.Command {
 
 func cmdAnalyze() *cobra.Command {
 	var days int
+	var dbPath string
 	cmd := &cobra.Command{
 		Use:   "analyze",
-		Short: "Anomalies + deploy correlations",
+		Short: "Detect anomalies and investigate each with AI agent",
 		RunE: func(cmd *cobra.Command, args []string) error {
-			return notImplemented("analyze")
+			ctx := context.Background()
+			db, err := storage.Open(dbPath)
+			if err != nil {
+				return err
+			}
+			defer db.Close()
+
+			since := time.Now().UTC().AddDate(0, 0, -days)
+			anomalies, err := detect.Run(ctx, db, detect.DefaultConfig(), since)
+			if err != nil {
+				return err
+			}
+			if len(anomalies) == 0 {
+				fmt.Println("no anomalies detected")
+				return nil
+			}
+			fmt.Printf("detected %d anomaly(ies)\n\n", len(anomalies))
+
+			apiKey := os.Getenv("GEMINI_API_KEY")
+			if apiKey == "" {
+				fmt.Println("set GEMINI_API_KEY to enable agent investigation")
+				for _, a := range anomalies {
+					fmt.Printf("  ANOMALY  key:%-18s  date:%s  delta:+$%.2f  %.1fσ\n",
+						a.APIKeyID, a.Date, a.Delta, a.Sigma)
+				}
+				return nil
+			}
+
+			inv, err := agent.New(db, apiKey, os.Getenv("GEMINI_MODEL"))
+			if err != nil {
+				return fmt.Errorf("init agent: %w", err)
+			}
+			emit := func(msg string) { fmt.Println(msg) }
+			for i, a := range anomalies {
+				if i > 0 {
+					fmt.Println()
+				}
+				fmt.Printf("── Anomaly %d/%d: %s on %s ─────────────────────────\n",
+					i+1, len(anomalies), a.APIKeyID, a.Date)
+				if err := inv.Investigate(ctx, a, emit); err != nil {
+					fmt.Printf("[error] %v\n", err)
+				}
+			}
+			return nil
 		},
 	}
 	cmd.Flags().IntVar(&days, "days", 30, "window to analyze")
+	cmd.Flags().StringVar(&dbPath, "db", "llmtrace.db", "path to SQLite ledger")
 	return cmd
 }
 

@@ -8,10 +8,12 @@ import (
 
 	"github.com/spf13/cobra"
 
+	"github.com/Yatsuiii/llmtrace/internal/actions"
 	"github.com/Yatsuiii/llmtrace/internal/agent"
 	"github.com/Yatsuiii/llmtrace/internal/detect"
 	"github.com/Yatsuiii/llmtrace/internal/seed"
 	"github.com/Yatsuiii/llmtrace/internal/storage"
+	"github.com/Yatsuiii/llmtrace/internal/watcher"
 	"github.com/Yatsuiii/llmtrace/internal/web"
 )
 
@@ -23,6 +25,7 @@ func main() {
 	root.AddCommand(
 		cmdInit(),
 		cmdServe(),
+		cmdWatch(),
 		cmdKeys(),
 		cmdStats(),
 		cmdTail(),
@@ -104,6 +107,7 @@ func cmdInit() *cobra.Command {
 func cmdServe() *cobra.Command {
 	var port int
 	var dbPath string
+	var autonomous bool
 	cmd := &cobra.Command{
 		Use:   "serve",
 		Short: "Run the dashboard server",
@@ -114,12 +118,81 @@ func cmdServe() *cobra.Command {
 				return err
 			}
 			defer db.Close()
-			return web.Serve(ctx, db, port)
+
+			var w *watcher.Watcher
+			if autonomous {
+				w, err = buildWatcher(ctx, db)
+				if err != nil {
+					return err
+				}
+				go w.Run(ctx)
+			}
+			return web.Serve(ctx, db, port, w)
 		},
 	}
 	cmd.Flags().IntVar(&port, "port", 8080, "listen port")
 	cmd.Flags().StringVar(&dbPath, "db", "llmtrace.db", "path to SQLite ledger")
+	cmd.Flags().BoolVar(&autonomous, "autonomous", false, "enable autonomous anomaly watcher")
 	return cmd
+}
+
+func cmdWatch() *cobra.Command {
+	var dbPath string
+	var interval int
+	cmd := &cobra.Command{
+		Use:   "watch",
+		Short: "Run the autonomous watcher loop (no web server)",
+		RunE: func(cmd *cobra.Command, args []string) error {
+			ctx := context.Background()
+			db, err := storage.Open(dbPath)
+			if err != nil {
+				return err
+			}
+			defer db.Close()
+
+			w, err := buildWatcher(ctx, db)
+			if err != nil {
+				return err
+			}
+			if interval > 0 {
+				w = watcher.New(db, mustInvestigator(db), actions.GitHubFromEnv(),
+					watcher.Config{Interval: time.Duration(interval) * time.Minute, LookbackDays: 30})
+			}
+			emit := func(msg string) { fmt.Println(msg) }
+			ch := w.Subscribe()
+			go func() {
+				for msg := range ch {
+					emit(msg)
+				}
+			}()
+			return w.Run(ctx)
+		},
+	}
+	cmd.Flags().StringVar(&dbPath, "db", "llmtrace.db", "path to SQLite ledger")
+	cmd.Flags().IntVar(&interval, "interval", 15, "scan interval in minutes")
+	return cmd
+}
+
+func buildWatcher(ctx context.Context, db *storage.DB) (*watcher.Watcher, error) {
+	apiKey := os.Getenv("GEMINI_API_KEY")
+	if apiKey == "" {
+		return nil, fmt.Errorf("GEMINI_API_KEY required for autonomous mode")
+	}
+	inv, err := agent.New(db, apiKey, os.Getenv("GEMINI_MODEL"))
+	if err != nil {
+		return nil, fmt.Errorf("init agent: %w", err)
+	}
+	gh := actions.GitHubFromEnv()
+	cfg := watcher.DefaultConfig()
+	return watcher.New(db, inv, gh, cfg), nil
+}
+
+func mustInvestigator(db *storage.DB) *agent.Investigator {
+	inv, err := agent.New(db, os.Getenv("GEMINI_API_KEY"), os.Getenv("GEMINI_MODEL"))
+	if err != nil {
+		panic(err)
+	}
+	return inv
 }
 
 func cmdKeys() *cobra.Command {
@@ -258,7 +331,7 @@ func cmdAnalyze() *cobra.Command {
 				}
 				fmt.Printf("── Anomaly %d/%d: %s on %s ─────────────────────────\n",
 					i+1, len(anomalies), a.APIKeyID, a.Date)
-				if err := inv.Investigate(ctx, a, emit); err != nil {
+				if _, err := inv.Investigate(ctx, a, emit); err != nil {
 					fmt.Printf("[error] %v\n", err)
 				}
 			}

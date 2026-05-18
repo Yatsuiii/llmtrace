@@ -68,4 +68,17 @@ CREATE TABLE IF NOT EXISTS sync_cursors (
     name  TEXT PRIMARY KEY,
     value TEXT NOT NULL
 );
+
+CREATE TABLE IF NOT EXISTS agent_actions (
+    id           INTEGER PRIMARY KEY AUTOINCREMENT,
+    anomaly_id   INTEGER NOT NULL,
+    action_type  TEXT NOT NULL,
+    status       TEXT NOT NULL,
+    payload      TEXT NOT NULL DEFAULT '{}',
+    result       TEXT NOT NULL DEFAULT '{}',
+    attribution  TEXT NOT NULL DEFAULT '',
+    created_at   INTEGER NOT NULL,
+    UNIQUE(anomaly_id, action_type)
+);
+CREATE INDEX IF NOT EXISTS agent_actions_created_idx ON agent_actions(created_at);
 `

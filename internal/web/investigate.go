@@ -62,7 +62,7 @@ func investigateHandler(db *storage.DB) http.HandlerFunc {
 			flusher.Flush()
 		}
 
-		if err := inv.Investigate(ctx, *target, emit); err != nil {
+		if _, err := inv.Investigate(ctx, *target, emit); err != nil {
 			emit(fmt.Sprintf("[error] %v", err))
 		}
 	}

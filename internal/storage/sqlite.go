@@ -304,6 +304,70 @@ func (db *DB) ListDeploys(ctx context.Context, since time.Time) ([]DeployRow, er
 	return out, rows.Err()
 }
 
+type AgentActionRow struct {
+	ID          int64
+	AnomalyID   int64
+	ActionType  string
+	Status      string
+	Payload     string
+	Result      string
+	Attribution string
+	CreatedAt   time.Time
+}
+
+func (db *DB) InsertAgentAction(ctx context.Context, a AgentActionRow) error {
+	_, err := db.conn.ExecContext(ctx,
+		`INSERT OR IGNORE INTO agent_actions
+		 (anomaly_id, action_type, status, payload, result, attribution, created_at)
+		 VALUES (?, ?, ?, ?, ?, ?, ?)`,
+		a.AnomalyID, a.ActionType, a.Status, a.Payload, a.Result, a.Attribution,
+		a.CreatedAt.UnixMilli(),
+	)
+	if err != nil {
+		return fmt.Errorf("insert agent_action: %w", err)
+	}
+	return nil
+}
+
+func (db *DB) HasAgentAction(ctx context.Context, anomalyID int64) (bool, error) {
+	var n int
+	err := db.conn.QueryRowContext(ctx,
+		`SELECT COUNT(*) FROM agent_actions WHERE anomaly_id = ?`, anomalyID,
+	).Scan(&n)
+	return n > 0, err
+}
+
+func (db *DB) ListAgentActions(ctx context.Context, since time.Time) ([]AgentActionRow, error) {
+	rows, err := db.conn.QueryContext(ctx,
+		`SELECT id, anomaly_id, action_type, status, payload, result, attribution, created_at
+		 FROM agent_actions WHERE created_at >= ? ORDER BY created_at DESC`,
+		since.UnixMilli(),
+	)
+	if err != nil {
+		return nil, fmt.Errorf("list agent_actions: %w", err)
+	}
+	defer rows.Close()
+	var out []AgentActionRow
+	for rows.Next() {
+		var a AgentActionRow
+		var createdMs int64
+		if err := rows.Scan(&a.ID, &a.AnomalyID, &a.ActionType, &a.Status,
+			&a.Payload, &a.Result, &a.Attribution, &createdMs); err != nil {
+			return nil, fmt.Errorf("scan agent_action: %w", err)
+		}
+		a.CreatedAt = time.UnixMilli(createdMs).UTC()
+		out = append(out, a)
+	}
+	return out, rows.Err()
+}
+
+func (db *DB) SetAPIKeyRateLimit(ctx context.Context, keyID string, rpm int) error {
+	_, err := db.conn.ExecContext(ctx,
+		`UPDATE api_keys SET rate_limit_rpm = ? WHERE id = ?`, rpm, keyID,
+	)
+	return err
+}
+
 func (db *DB) CountCalls(ctx context.Context) (int64, error) {
 	var n int64
 	if err := db.conn.QueryRowContext(ctx, "SELECT COUNT(*) FROM calls").Scan(&n); err != nil {

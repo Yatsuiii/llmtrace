@@ -5,7 +5,9 @@
 //
 //	Window: 2026-04-11 → 2026-05-11 (30 days).
 //	Keys:   prod-frontend (affected), internal-tools (control), background-jobs (control).
-//	Deploy: 2026-05-03 14:05 UTC — PR #129 "switch summary endpoint to claude-sonnet".
+//	Deploys: three land on 2026-05-03 — PR #1 (dependency bump) and PR #3 (README)
+//	         are innocent; PR #2 "switch summary endpoint to claude-sonnet" at
+//	         14:05 UTC is the real cause the agent must isolate.
 //	Pre-deploy:  /summary calls on prod-frontend run 90% Haiku / 10% Sonnet.
 //	Post-deploy: 10% Haiku / 90% Sonnet AND volume rises 1.6× (the new prompt
 //	             retries on malformed JSON).
@@ -19,6 +21,7 @@ import (
 	"encoding/hex"
 	"fmt"
 	"math/rand/v2"
+	"os"
 	"time"
 
 	"github.com/Yatsuiii/llmtrace/internal/pricing"
@@ -58,7 +61,7 @@ func Run(ctx context.Context, db *storage.DB) (int, error) {
 	if err := seedAPIKeys(ctx, db); err != nil {
 		return 0, err
 	}
-	if err := seedDeploy(ctx, db); err != nil {
+	if err := seedDeploys(ctx, db); err != nil {
 		return 0, err
 	}
 	return seedCalls(ctx, db)
@@ -78,18 +81,59 @@ func seedAPIKeys(ctx context.Context, db *storage.DB) error {
 	return nil
 }
 
-func seedDeploy(ctx context.Context, db *storage.DB) error {
-	return db.InsertDeploy(ctx, storage.DeployRow{
-		ID:          "gha-129-summary-sonnet",
-		Repo:        "acme/web",
-		Branch:      "main",
-		CommitSHA:   "c4e2117a8b1f",
-		PRNumber:    129,
-		Title:       "switch summary endpoint to claude-sonnet",
-		StartedAt:   deployAt,
-		CompletedAt: deployAt.Add(7 * time.Minute),
-		Status:      "success",
-	})
+// demoRepo is the synthetic "customer app" repo the agent reads code from and
+// opens remediation PRs against. Override with LLMTRACE_DEMO_REPO if needed.
+func demoRepo() string {
+	if r := os.Getenv("GITHUB_REPO"); r != "" {
+		return r
+	}
+	return "Yatsuiii/llmtrace-demo-app"
+}
+
+// seedDeploys plants three deploys on the anomaly day. Only PR #2 is the real
+// cause — the agent must read all three diffs to rule out the innocent ones.
+func seedDeploys(ctx context.Context, db *storage.DB) error {
+	deploys := []storage.DeployRow{
+		{
+			ID:          "gha-1-deps-bump",
+			Repo:        demoRepo(),
+			Branch:      "main",
+			CommitSHA:   "a1b2c3d4e5f6",
+			PRNumber:    1,
+			Title:       "bump anthropic SDK to 0.45",
+			StartedAt:   deployAt.Add(-35 * time.Minute),
+			CompletedAt: deployAt.Add(-30 * time.Minute),
+			Status:      "success",
+		},
+		{
+			ID:          "gha-2-summary-sonnet",
+			Repo:        demoRepo(),
+			Branch:      "main",
+			CommitSHA:   "c4e2117a8b1f",
+			PRNumber:    2,
+			Title:       "switch summary endpoint to claude-sonnet",
+			StartedAt:   deployAt,
+			CompletedAt: deployAt.Add(7 * time.Minute),
+			Status:      "success",
+		},
+		{
+			ID:          "gha-3-readme-tidy",
+			Repo:        demoRepo(),
+			Branch:      "main",
+			CommitSHA:   "f6e5d4c3b2a1",
+			PRNumber:    3,
+			Title:       "tidy README wording",
+			StartedAt:   deployAt.Add(105 * time.Minute),
+			CompletedAt: deployAt.Add(108 * time.Minute),
+			Status:      "success",
+		},
+	}
+	for _, d := range deploys {
+		if err := db.InsertDeploy(ctx, d); err != nil {
+			return err
+		}
+	}
+	return nil
 }
 
 func seedCalls(ctx context.Context, db *storage.DB) (int, error) {

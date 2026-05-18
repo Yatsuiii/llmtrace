@@ -1,3 +1,12 @@
+---
+title: llmtrace
+emoji: 📊
+colorFrom: blue
+colorTo: indigo
+sdk: docker
+app_port: 8080
+---
+
 # llmtrace
 
 **Autonomous AI agent that tells you which deploy caused your LLM bill to spike.**

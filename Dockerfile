@@ -11,6 +11,6 @@ WORKDIR /app
 COPY --from=builder /app/llmtrace .
 COPY entrypoint.sh .
 RUN chmod +x entrypoint.sh
-VOLUME ["/data"]
+RUN mkdir -p /data && chmod 777 /data
 EXPOSE 8080
 ENTRYPOINT ["./entrypoint.sh"]

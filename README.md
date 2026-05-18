@@ -1,12 +1,3 @@
----
-title: llmtrace
-emoji: 📊
-colorFrom: blue
-colorTo: indigo
-sdk: docker
-app_port: 8080
----
-
 # llmtrace
 
 **Autonomous AI agent that tells you which deploy caused your LLM bill to spike.**
@@ -15,6 +6,8 @@ Every team shipping AI features eventually asks: *"Why did our LLM spend double 
 Helicone, Langfuse, and LiteLLM show you *that* it spiked. llmtrace tells you *why* — by joining spend anomalies to the deploy that caused them, then reasoning over the evidence with an AI agent.
 
 Built for the [AI Agent Olympics Hackathon](https://lablab.ai/event/ai-agents-hackathon) · Milan AI Week 2026
+
+**🟢 Live demo:** https://llmtrace-681081536857.asia-south1.run.app — deployed on Google Cloud Run, autonomous agent running on Gemini.
 
 ---
 

@@ -1,0 +1,114 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>llmtrace cover</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&family=JetBrains+Mono:wght@500&display=swap" rel="stylesheet">
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  html, body { width: 1920px; height: 1080px; }
+  body {
+    font-family: 'Inter', system-ui, sans-serif; background: #07080d;
+    overflow: hidden; position: relative; -webkit-font-smoothing: antialiased;
+  }
+  body::before {
+    content: ''; position: absolute; inset: 0; pointer-events: none;
+    background:
+      radial-gradient(820px circle at 4% -10%, rgba(99,102,241,0.30), transparent 58%),
+      radial-gradient(900px circle at 64% 118%, rgba(154,134,255,0.20), transparent 56%),
+      radial-gradient(700px circle at 100% 0%, rgba(45,212,191,0.12), transparent 55%);
+  }
+  body::after {
+    content: ''; position: absolute; inset: 0; pointer-events: none; opacity: 0.55;
+    background-image:
+      linear-gradient(rgba(255,255,255,0.028) 1px, transparent 1px),
+      linear-gradient(90deg, rgba(255,255,255,0.028) 1px, transparent 1px);
+    background-size: 60px 60px;
+    -webkit-mask-image: radial-gradient(900px circle at 22% 45%, #000, transparent 72%);
+            mask-image: radial-gradient(900px circle at 22% 45%, #000, transparent 72%);
+  }
+
+  /* left text column */
+  .left {
+    position: absolute; left: 96px; top: 0; bottom: 0; width: 660px; z-index: 3;
+    display: flex; flex-direction: column; justify-content: center;
+  }
+  .eyebrow {
+    font-size: 18px; font-weight: 700; letter-spacing: 0.22em; text-transform: uppercase;
+    color: #b3a6ff; margin-bottom: 26px;
+  }
+  .wm { font-size: 80px; font-weight: 900; letter-spacing: -0.055em; line-height: 1;
+    color: #fff; margin-bottom: 30px; }
+  .wm span { background: linear-gradient(96deg, #9a86ff, #6366f1 60%, #4ade80);
+    -webkit-background-clip: text; background-clip: text; -webkit-text-fill-color: transparent; }
+  .headline {
+    font-size: 47px; font-weight: 800; letter-spacing: -0.03em; line-height: 1.18;
+    background: linear-gradient(176deg, #ffffff 40%, #aeb1c8);
+    -webkit-background-clip: text; background-clip: text; -webkit-text-fill-color: transparent;
+  }
+  .headline em { font-style: normal; color: #a594ff;
+    -webkit-text-fill-color: #a594ff; }
+  .ticks { margin-top: 32px; display: flex; flex-direction: column; gap: 13px; }
+  .tick { display: flex; align-items: center; gap: 12px; font-size: 21px;
+    font-weight: 500; color: #c2c5d6; }
+  .tick .dot { width: 8px; height: 8px; border-radius: 50%; flex-shrink: 0; }
+  .tick:nth-child(1) .dot { background: #ff6b6b; box-shadow: 0 0 12px #ff6b6b; }
+  .tick:nth-child(2) .dot { background: #9a86ff; box-shadow: 0 0 12px #9a86ff; }
+  .tick:nth-child(3) .dot { background: #4ade80; box-shadow: 0 0 12px #4ade80; }
+  .credit { margin-top: 42px; font-family: 'JetBrains Mono', monospace;
+    font-size: 17px; color: #585c70; letter-spacing: 0.02em; }
+  .credit b { color: #6ee79a; font-weight: 500; }
+
+  /* browser mockup */
+  .stage { position: absolute; right: -70px; top: 50%; z-index: 2;
+    transform: translateY(-50%); }
+  .stage::before {
+    content: ''; position: absolute; left: 6%; top: 8%; right: 6%; bottom: 8%;
+    background: radial-gradient(closest-side, rgba(124,92,255,0.45), transparent);
+    filter: blur(70px); z-index: -1;
+  }
+  .browser {
+    width: 1180px; border-radius: 16px; overflow: hidden;
+    background: #14161f; border: 1px solid rgba(255,255,255,0.10);
+    box-shadow: 0 70px 130px -34px rgba(0,0,0,0.85),
+                0 0 0 1px rgba(255,255,255,0.04);
+    transform: perspective(2400px) rotateY(-11deg) rotateX(3deg);
+  }
+  .bar { height: 50px; background: #1b1d27; display: flex; align-items: center;
+    gap: 9px; padding: 0 18px; border-bottom: 1px solid rgba(255,255,255,0.06); }
+  .bar .d { width: 13px; height: 13px; border-radius: 50%; }
+  .bar .d1 { background: #ff5f57; } .bar .d2 { background: #febc2e; }
+  .bar .d3 { background: #28c840; }
+  .bar .url { margin-left: 16px; flex: 1; height: 30px; border-radius: 8px;
+    background: #0c0d14; display: flex; align-items: center; padding: 0 14px;
+    font-family: 'JetBrains Mono', monospace; font-size: 14px; color: #6a6e82; }
+  .bar .url .lock { color: #4ade80; margin-right: 8px; }
+  .browser img { display: block; width: 100%; }
+</style>
+</head>
+<body>
+  <div class="left">
+    <div class="eyebrow">AI Agent Olympics &nbsp;·&nbsp; Milan AI Week 2026</div>
+    <div class="wm">llm<span>trace</span></div>
+    <div class="headline">Trace every LLM spend spike back to the <em>deploy that shipped it</em>.</div>
+    <div class="ticks">
+      <div class="tick"><span class="dot"></span> Detects per-key cost anomalies</div>
+      <div class="tick"><span class="dot"></span> A Gemini agent names the exact PR</div>
+      <div class="tick"><span class="dot"></span> Opens the fix pull request on its own</div>
+    </div>
+    <div class="credit">Go &nbsp;·&nbsp; Gemini &nbsp;·&nbsp; SQLite &nbsp;·&nbsp; <b>live on Google Cloud Run</b></div>
+  </div>
+
+  <div class="stage">
+    <div class="browser">
+      <div class="bar">
+        <span class="d d1"></span><span class="d d2"></span><span class="d d3"></span>
+        <span class="url"><span class="lock">&#9679;</span>llmtrace-681081536857.asia-south1.run.app</span>
+      </div>
+      <img src="dash-shot.png" alt="llmtrace dashboard">
+    </div>
+  </div>
+</body>
+</html>

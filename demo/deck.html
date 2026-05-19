@@ -1,0 +1,266 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>llmtrace pitch deck</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+<style>
+  @page { size: 1280px 720px; margin: 0; }
+  * { box-sizing: border-box; margin: 0; padding: 0;
+    -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+  :root {
+    --bg: #07080d; --text: #e8eaf2; --muted: #9094a8; --dim: #585c70;
+    --violet: #9a86ff; --indigo: #6366f1; --red: #ff6b6b;
+    --green: #4ade80; --amber: #fbbf24;
+    --mono: 'JetBrains Mono', monospace;
+  }
+  body { font-family: 'Inter', system-ui, sans-serif; background: var(--bg);
+    -webkit-font-smoothing: antialiased; }
+  .slide {
+    width: 1280px; height: 720px; position: relative; overflow: hidden;
+    background: var(--bg); color: var(--text);
+    padding: 76px 88px; page-break-after: always; display: flex; flex-direction: column;
+  }
+  .slide:last-child { page-break-after: auto; }
+  .slide::before {
+    content: ''; position: absolute; inset: 0; pointer-events: none;
+    background:
+      radial-gradient(620px circle at 6% -10%, rgba(99,102,241,0.20), transparent 60%),
+      radial-gradient(680px circle at 102% 8%, rgba(154,134,255,0.13), transparent 56%),
+      radial-gradient(720px circle at 92% 110%, rgba(45,212,191,0.08), transparent 60%);
+  }
+  .slide > * { position: relative; z-index: 1; }
+  .sn { position: absolute; top: 64px; right: 88px; z-index: 1;
+    font-family: var(--mono); font-size: 16px; color: var(--dim); letter-spacing: 0.06em; }
+  .eyebrow { font-size: 17px; font-weight: 700; letter-spacing: 0.2em;
+    text-transform: uppercase; color: var(--violet); margin-bottom: 22px; }
+  h2 { font-size: 52px; font-weight: 800; letter-spacing: -0.032em; line-height: 1.08;
+    color: #fff; max-width: 19ch; }
+  h2 .g { background: linear-gradient(92deg, var(--violet), var(--indigo));
+    -webkit-background-clip: text; background-clip: text; -webkit-text-fill-color: transparent; }
+  .lead { font-size: 25px; line-height: 1.6; color: var(--muted); margin-top: 26px; max-width: 60ch; }
+  .lead b { color: #dadce8; font-weight: 600; }
+  .foot { position: absolute; left: 88px; bottom: 60px; z-index: 1;
+    font-family: var(--mono); font-size: 15px; color: var(--dim); }
+
+  /* title slide */
+  .title { justify-content: center; align-items: flex-start; }
+  .title .wm { font-size: 132px; font-weight: 900; letter-spacing: -0.055em;
+    line-height: 0.95; color: #fff; }
+  .title .wm span { background: linear-gradient(96deg, var(--violet), var(--indigo) 62%, var(--green));
+    -webkit-background-clip: text; background-clip: text; -webkit-text-fill-color: transparent; }
+  .title .tag { font-size: 44px; font-weight: 800; letter-spacing: -0.025em;
+    margin-top: 26px; color: #fff; }
+  .title .role { font-size: 22px; color: var(--muted); margin-top: 18px; }
+  .title .ev { position: absolute; left: 88px; bottom: 64px; z-index: 1;
+    font-size: 18px; color: var(--dim); }
+  .title .ev b { color: var(--violet); font-weight: 600; }
+
+  /* bullets */
+  .bul { margin-top: 30px; display: flex; flex-direction: column; gap: 18px; }
+  .bul .b { display: flex; gap: 16px; align-items: flex-start;
+    font-size: 23px; line-height: 1.5; color: var(--muted); max-width: 62ch; }
+  .bul .b .mk { color: var(--violet); font-weight: 800; flex-shrink: 0; }
+  .bul .b b { color: #e4e6f0; font-weight: 600; }
+
+  /* table */
+  table { margin-top: 30px; border-collapse: collapse; width: 100%; }
+  th, td { text-align: left; padding: 13px 18px; font-size: 20px; }
+  th { font-size: 14px; text-transform: uppercase; letter-spacing: 0.07em;
+    color: var(--dim); border-bottom: 1px solid rgba(255,255,255,0.1); }
+  td { border-bottom: 1px solid rgba(255,255,255,0.06); color: var(--muted); }
+  tr.us td { color: #fff; font-weight: 600; }
+  tr.us { background: rgba(154,134,255,0.08); }
+  .miss { color: #ff9b9b; }
+  .has { color: #8af0a8; }
+
+  /* pipeline */
+  .pipe { margin-top: 42px; display: flex; align-items: center; gap: 14px; flex-wrap: wrap; }
+  .node { background: rgba(255,255,255,0.04); border: 1px solid rgba(255,255,255,0.1);
+    border-radius: 13px; padding: 18px 22px; font-size: 19px; font-weight: 600; color: #fff; }
+  .node .s { display: block; font-size: 14px; color: var(--muted); font-weight: 400; margin-top: 4px; }
+  .node.accent { border-color: rgba(154,134,255,0.4); background: rgba(154,134,255,0.1); }
+  .arw { color: var(--dim); font-size: 24px; }
+  .pipe-tail { margin-top: 26px; display: flex; align-items: center; gap: 14px; }
+
+  /* code */
+  pre { margin-top: 26px; background: #0a0b11; border: 1px solid rgba(255,255,255,0.08);
+    border-radius: 14px; padding: 26px 30px; font-family: var(--mono); font-size: 17px;
+    line-height: 1.62; color: var(--muted); white-space: pre-wrap; }
+  pre .t { color: #79b8ff; }
+  pre .a { color: #fff; font-weight: 500; }
+  pre .c { color: var(--green); font-weight: 600; }
+  pre .d { color: var(--dim); }
+
+  /* feature cards */
+  .cards { margin-top: 34px; display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
+  .fc { background: rgba(255,255,255,0.04); border: 1px solid rgba(255,255,255,0.1);
+    border-radius: 14px; padding: 22px 24px; }
+  .fc .h { font-size: 21px; font-weight: 700; color: #fff; margin-bottom: 8px; }
+  .fc .p { font-size: 18px; line-height: 1.5; color: var(--muted); }
+  .fc.v { border-left: 3px solid var(--violet); }
+  .fc.g { border-left: 3px solid var(--green); }
+  .fc.r { border-left: 3px solid var(--red); }
+  .fc.a { border-left: 3px solid var(--amber); }
+
+  /* close */
+  .links { margin-top: 38px; display: flex; flex-direction: column; gap: 16px; }
+  .lk { display: flex; align-items: baseline; gap: 16px; font-size: 23px; }
+  .lk .k { font-size: 15px; font-weight: 700; letter-spacing: 0.08em;
+    text-transform: uppercase; color: var(--dim); width: 130px; flex-shrink: 0; }
+  .lk .v { font-family: var(--mono); color: #c8bdff; }
+  .lk .v.live { color: var(--green); }
+</style>
+</head>
+<body>
+
+<!-- 1 -->
+<div class="slide title">
+  <div class="wm">llm<span>trace</span></div>
+  <div class="tag">Which deploy spiked your LLM bill?</div>
+  <div class="role">An autonomous agent for LLM cost attribution.</div>
+  <div class="ev">AI Agent Olympics &nbsp;·&nbsp; Milan AI Week 2026 &nbsp;&nbsp;|&nbsp;&nbsp;
+    <b>AI Agents</b> &nbsp;and&nbsp; <b>Google / Gemini</b> tracks</div>
+</div>
+
+<!-- 2 -->
+<div class="slide">
+  <div class="sn">02 / 10</div>
+  <div class="eyebrow">The problem</div>
+  <h2>Your LLM bill doubled. <span class="g">Nobody knows why.</span></h2>
+  <div class="bul">
+    <div class="b"><span class="mk">&rsaquo;</span><div>Spend dashboards show <b>that</b> cost went up. They never show <b>what shipped</b> that made it go up.</div></div>
+    <div class="b"><span class="mk">&rsaquo;</span><div>A model swap in one pull request, a retry loop in another, and the bill climbs quietly for days.</div></div>
+    <div class="b"><span class="mk">&rsaquo;</span><div>Someone burns an afternoon cross-referencing Git history against billing exports, by hand.</div></div>
+  </div>
+</div>
+
+<!-- 3 -->
+<div class="slide">
+  <div class="sn">03 / 10</div>
+  <div class="eyebrow">The gap</div>
+  <h2>Observability tools stop at the symptom</h2>
+  <table>
+    <tr><th>Tool</th><th>What it gives you</th><th>What it misses</th></tr>
+    <tr><td>Helicone</td><td>Hosted observability and caching</td><td class="miss">No deploy correlation</td></tr>
+    <tr><td>Langfuse</td><td>LLM trace observability</td><td class="miss">Trace-focused, not cost-causal</td></tr>
+    <tr><td>LiteLLM</td><td>Open-source proxy</td><td class="miss">No anomaly detection or deploy join</td></tr>
+    <tr class="us"><td>llmtrace</td><td>Self-hosted proxy and causal agent</td><td class="has">Names the deploy that caused it</td></tr>
+  </table>
+  <div class="lead">The sharp claim: deploy to LLM-spend causality, with zero hosted SaaS dependency.</div>
+</div>
+
+<!-- 4 -->
+<div class="slide">
+  <div class="sn">04 / 10</div>
+  <div class="eyebrow">What llmtrace does</div>
+  <h2>It joins the spike to <span class="g">the deploy that caused it</span></h2>
+  <div class="pipe">
+    <div class="node">Spend spike<span class="s">flagged on a key</span></div>
+    <div class="arw">&rarr;</div>
+    <div class="node">Deploys in window<span class="s">pulled from GitHub</span></div>
+    <div class="arw">&rarr;</div>
+    <div class="node">Model / prompt diff<span class="s">before vs after</span></div>
+    <div class="arw">&rarr;</div>
+    <div class="node accent">Named PR<span class="s">plus confidence score</span></div>
+  </div>
+  <div class="lead">Anomaly detection, time-window correlation, and lineage scoring, run by an agent
+    instead of an engineer.</div>
+</div>
+
+<!-- 5 -->
+<div class="slide">
+  <div class="sn">05 / 10</div>
+  <div class="eyebrow">How it works</div>
+  <h2>A proxy, a ledger, and a Gemini agent</h2>
+  <div class="pipe">
+    <div class="node">Your app</div>
+    <div class="arw">&rarr;</div>
+    <div class="node accent">llmtrace proxy<span class="s">records every call</span></div>
+    <div class="arw">&rarr;</div>
+    <div class="node">Provider<span class="s">Anthropic / OpenAI</span></div>
+  </div>
+  <div class="pipe-tail">
+    <div class="node">SQLite ledger<span class="s">cost, latency, prompt hash</span></div>
+    <div class="arw">&rarr;</div>
+    <div class="node">Anomaly detector<span class="s">rolling baseline + sigma</span></div>
+    <div class="arw">&rarr;</div>
+    <div class="node accent">Gemini agent<span class="s">tool-calling investigation</span></div>
+  </div>
+  <div class="lead">Point your code at llmtrace instead of the provider URL. Nothing else changes.</div>
+</div>
+
+<!-- 6 -->
+<div class="slide">
+  <div class="sn">06 / 10</div>
+  <div class="eyebrow">The agent investigates</div>
+  <h2>Three tool calls to the root cause</h2>
+  <pre><span class="d">anomaly: key=prod-frontend  $19.20 vs $4.48 baseline  28.0&sigma;</span>
+
+<span class="t">[tool]</span> query_model_distribution  prod-frontend
+<span class="t">[tool]</span> get_deploys_in_window     pivot 2026-05-18T09:40Z
+<span class="t">[tool]</span> diff_prompt_model_mix     before 91% haiku / after 89% sonnet
+
+<span class="a">Attribution: PR #2 "switch summary endpoint to claude-sonnet"</span>
+<span class="a">shifted the summary prompt from claude-haiku to a costlier model.</span>
+<span class="c">Confidence: 0.95</span></pre>
+</div>
+
+<!-- 7 -->
+<div class="slide">
+  <div class="sn">07 / 10</div>
+  <div class="eyebrow">Autonomous</div>
+  <h2>It does not wait <span class="g">to be asked</span></h2>
+  <div class="cards">
+    <div class="fc v"><div class="h">Background watcher</div><div class="p">Scans the ledger on a loop. A new spike triggers an investigation with no human in the loop.</div></div>
+    <div class="fc r"><div class="h">It takes action</div><div class="p">Opens a GitHub issue, tightens a rate limit, or writes a corrected file and opens a fix pull request.</div></div>
+    <div class="fc g"><div class="h">Real GitHub actions</div><div class="p">The agent reads PR diffs and source files, then ships a real branch and PR to your repo.</div></div>
+    <div class="fc a"><div class="h">Every action logged</div><div class="p">The dashboard shows each scan, attribution, and remediation as it happens, live.</div></div>
+  </div>
+</div>
+
+<!-- 8 -->
+<div class="slide">
+  <div class="sn">08 / 10</div>
+  <div class="eyebrow">Multimodal</div>
+  <h2>Vision Import: drop in <span class="g">any billing screenshot</span></h2>
+  <div class="bul">
+    <div class="b"><span class="mk">&rsaquo;</span><div>No ledger yet? Upload a screenshot of any billing dashboard, Anthropic, OpenAI, or a Grafana panel.</div></div>
+    <div class="b"><span class="mk">&rsaquo;</span><div><b>Gemini multimodal</b> reads the daily spend straight off the image and finds the spike.</div></div>
+    <div class="b"><span class="mk">&rsaquo;</span><div>The agent then investigates your connected GitHub repo and attributes the cause, end to end.</div></div>
+  </div>
+  <div class="lead">The same causal engine, reachable from a picture.</div>
+</div>
+
+<!-- 9 -->
+<div class="slide">
+  <div class="sn">09 / 10</div>
+  <div class="eyebrow">Built to ship</div>
+  <h2>One Go binary. <span class="g">Zero hosted SaaS.</span></h2>
+  <div class="cards">
+    <div class="fc v"><div class="h">Go</div><div class="p">Proxy, ledger, anomaly detection, and web server on the standard library.</div></div>
+    <div class="fc g"><div class="h">Gemini</div><div class="p">google.golang.org/genai SDK, multi-turn tool-calling agent loop.</div></div>
+    <div class="fc a"><div class="h">SQLite</div><div class="p">Pure-Go modernc.org/sqlite, no CGo. The whole ledger is one file.</div></div>
+    <div class="fc r"><div class="h">Google Cloud Run</div><div class="p">Single container, deployed live and serving real traffic right now.</div></div>
+  </div>
+</div>
+
+<!-- 10 -->
+<div class="slide">
+  <div class="sn">10 / 10</div>
+  <div class="eyebrow">Try it</div>
+  <h2>Live <span class="g">right now</span></h2>
+  <div class="links">
+    <div class="lk"><span class="k">Live demo</span><span class="v live">llmtrace-681081536857.asia-south1.run.app</span></div>
+    <div class="lk"><span class="k">Source</span><span class="v">github.com/Yatsuiii/llmtrace</span></div>
+    <div class="lk"><span class="k">Stack</span><span class="v">Go &nbsp;·&nbsp; Gemini &nbsp;·&nbsp; SQLite &nbsp;·&nbsp; Cloud Run</span></div>
+  </div>
+  <div class="lead">Part of the trace family: operational tooling that joins telemetry to the change
+    that caused it, across cloud and AI ops.</div>
+  <div class="foot">llmtrace &nbsp;·&nbsp; AI Agent Olympics &nbsp;·&nbsp; Milan AI Week 2026</div>
+</div>
+
+</body>
+</html>

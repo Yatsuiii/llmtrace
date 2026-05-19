@@ -1,0 +1,123 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>llmtrace demo cards</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&family=JetBrains+Mono:wght@500&display=swap" rel="stylesheet">
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  :root {
+    --violet: #9a86ff; --indigo: #6366f1; --green: #4ade80;
+    --muted: #9094a8; --dim: #585c70; --mono: 'JetBrains Mono', monospace;
+  }
+  body { font-family: 'Inter', system-ui, sans-serif; -webkit-font-smoothing: antialiased; }
+  .card {
+    width: 1920px; height: 1080px; position: relative; overflow: hidden;
+    background: #07080d; color: #e8eaf2;
+    display: flex; flex-direction: column; justify-content: center;
+    padding: 0 200px;
+  }
+  .card::before {
+    content: ''; position: absolute; inset: 0; pointer-events: none;
+    background:
+      radial-gradient(900px circle at 8% -8%, rgba(99,102,241,0.24), transparent 58%),
+      radial-gradient(960px circle at 100% 12%, rgba(154,134,255,0.16), transparent 55%),
+      radial-gradient(1000px circle at 86% 110%, rgba(45,212,191,0.10), transparent 60%);
+  }
+  .card::after {
+    content: ''; position: absolute; inset: 0; pointer-events: none; opacity: 0.5;
+    background-image:
+      linear-gradient(rgba(255,255,255,0.026) 1px, transparent 1px),
+      linear-gradient(90deg, rgba(255,255,255,0.026) 1px, transparent 1px);
+    background-size: 70px 70px;
+    -webkit-mask-image: radial-gradient(1100px circle at 40% 50%, #000, transparent 74%);
+            mask-image: radial-gradient(1100px circle at 40% 50%, #000, transparent 74%);
+  }
+  .card > * { position: relative; z-index: 1; }
+
+  .idx {
+    font-family: var(--mono); font-size: 30px; font-weight: 500; letter-spacing: 0.1em;
+    color: var(--violet); margin-bottom: 30px;
+  }
+  .idx .of { color: var(--dim); }
+  .title {
+    font-size: 92px; font-weight: 800; letter-spacing: -0.035em; line-height: 1.06;
+    color: #fff; max-width: 20ch;
+  }
+  .desc {
+    font-size: 33px; line-height: 1.55; color: var(--muted); margin-top: 34px; max-width: 30ch;
+  }
+  .tick {
+    position: absolute; left: 200px; bottom: 96px; z-index: 1;
+    font-family: var(--mono); font-size: 22px; color: var(--dim);
+  }
+
+  /* opener */
+  .wm { font-size: 168px; font-weight: 900; letter-spacing: -0.055em; line-height: 0.95; color: #fff; }
+  .wm span { background: linear-gradient(96deg, var(--violet), var(--indigo) 60%, var(--green));
+    -webkit-background-clip: text; background-clip: text; -webkit-text-fill-color: transparent; }
+  .opener .tag { font-size: 52px; font-weight: 700; color: #fff; margin-top: 30px; letter-spacing: -0.02em; }
+  .opener .role { font-size: 30px; color: var(--muted); margin-top: 20px; }
+
+  /* closer */
+  .closer .title { font-size: 84px; }
+  .links { margin-top: 44px; display: flex; flex-direction: column; gap: 22px; }
+  .lk { font-family: var(--mono); font-size: 32px; }
+  .lk .k { color: var(--dim); }
+  .lk .v { color: #c8bdff; }
+  .lk .v.live { color: var(--green); }
+</style>
+</head>
+<body>
+
+<!-- card 0 — opener -->
+<div class="card opener">
+  <div class="wm">llm<span>trace</span></div>
+  <div class="tag">Which deploy spiked your LLM bill?</div>
+  <div class="role">An autonomous agent for LLM cost attribution.</div>
+  <div class="tick">AI Agent Olympics &nbsp;·&nbsp; Milan AI Week 2026</div>
+</div>
+
+<!-- card 1 -->
+<div class="card">
+  <div class="idx">01 <span class="of">/ 04</span></div>
+  <div class="title">Spot the spike</div>
+  <div class="desc">llmtrace flags a per-key spend anomaly. The prod-frontend key jumped over 4x above its baseline.</div>
+</div>
+
+<!-- card 2 -->
+<div class="card">
+  <div class="idx">02 <span class="of">/ 04</span></div>
+  <div class="title">The agent investigates</div>
+  <div class="desc">A Gemini agent queries the ledger, finds nearby deploys, and names the pull request responsible, with a confidence score.</div>
+</div>
+
+<!-- card 3 -->
+<div class="card">
+  <div class="idx">03 <span class="of">/ 04</span></div>
+  <div class="title">Vision Import</div>
+  <div class="desc">Drop in a screenshot of any billing dashboard. Gemini reads the spend off the image, then the agent traces the cause.</div>
+</div>
+
+<!-- card 4 -->
+<div class="card">
+  <div class="idx">04 <span class="of">/ 04</span></div>
+  <div class="title">It acts on its own</div>
+  <div class="desc">A background watcher investigates autonomously, then opens a real fix pull request on GitHub. No human in the loop.</div>
+</div>
+
+<!-- card 5 — closer -->
+<div class="card closer">
+  <div class="idx">Live now</div>
+  <div class="title">Self-hosted. One Go binary.</div>
+  <div class="links">
+    <div class="lk"><span class="k">demo &nbsp;</span><span class="v live">llmtrace-681081536857.asia-south1.run.app</span></div>
+    <div class="lk"><span class="k">code &nbsp;</span><span class="v">github.com/Yatsuiii/llmtrace</span></div>
+  </div>
+  <div class="tick">Go &nbsp;·&nbsp; Gemini &nbsp;·&nbsp; SQLite &nbsp;·&nbsp; Google Cloud Run</div>
+</div>
+
+</body>
+</html>

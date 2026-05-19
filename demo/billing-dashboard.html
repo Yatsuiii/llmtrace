@@ -1,0 +1,204 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>Cost · Anthropic Console</title>
+<style>
+  :root {
+    --bg: #f5f4f0;
+    --panel: #ffffff;
+    --ink: #1a1915;
+    --muted: #6b6a63;
+    --line: #e6e4dd;
+    --accent: #d97757;
+    --accent-soft: #f4e3dc;
+    --danger: #c0392b;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body {
+    font-family: -apple-system, "Segoe UI", "Inter", Roboto, sans-serif;
+    background: var(--bg);
+    color: var(--ink);
+    -webkit-font-smoothing: antialiased;
+    padding: 0;
+  }
+  .topbar {
+    display: flex; align-items: center; justify-content: space-between;
+    background: var(--panel);
+    border-bottom: 1px solid var(--line);
+    padding: 12px 28px;
+  }
+  .brand { display: flex; align-items: center; gap: 9px; font-weight: 600; font-size: 15px; }
+  .brand .mark {
+    width: 22px; height: 22px; border-radius: 5px;
+    background: var(--accent);
+    display: inline-flex; align-items: center; justify-content: center;
+    color: #fff; font-weight: 700; font-size: 13px;
+  }
+  .org { display: flex; align-items: center; gap: 9px; font-size: 13px; color: var(--muted); }
+  .org .avatar {
+    width: 26px; height: 26px; border-radius: 50%;
+    background: #3a6ea5; color: #fff;
+    display: inline-flex; align-items: center; justify-content: center;
+    font-size: 12px; font-weight: 600;
+  }
+  .wrap { max-width: 1060px; margin: 0 auto; padding: 26px 28px 40px; }
+  h1 { font-size: 22px; font-weight: 600; margin-bottom: 3px; }
+  .crumb { font-size: 13px; color: var(--muted); margin-bottom: 18px; }
+  .tabs { display: flex; gap: 22px; border-bottom: 1px solid var(--line); margin-bottom: 22px; }
+  .tabs span { padding-bottom: 10px; font-size: 14px; color: var(--muted); cursor: default; }
+  .tabs span.active { color: var(--ink); font-weight: 600; border-bottom: 2px solid var(--accent); }
+  .filters { display: flex; gap: 10px; margin-bottom: 22px; flex-wrap: wrap; }
+  .pill {
+    background: var(--panel); border: 1px solid var(--line); border-radius: 7px;
+    padding: 7px 12px; font-size: 13px; color: var(--ink);
+    display: flex; align-items: center; gap: 7px;
+  }
+  .pill .lbl { color: var(--muted); }
+  .pill .caret { color: var(--muted); font-size: 10px; }
+  .cards { display: flex; gap: 14px; margin-bottom: 22px; }
+  .card {
+    background: var(--panel); border: 1px solid var(--line); border-radius: 10px;
+    padding: 16px 18px; flex: 1;
+  }
+  .card .k { font-size: 12px; color: var(--muted); text-transform: uppercase; letter-spacing: .04em; }
+  .card .v { font-size: 26px; font-weight: 600; margin-top: 6px; }
+  .card .sub { font-size: 12px; margin-top: 5px; }
+  .up { color: var(--danger); font-weight: 600; }
+  .flat { color: var(--muted); }
+  .panel {
+    background: var(--panel); border: 1px solid var(--line); border-radius: 10px;
+    padding: 20px 22px; margin-bottom: 20px;
+  }
+  .panel h2 { font-size: 14px; font-weight: 600; margin-bottom: 16px; }
+  .chart { display: flex; align-items: flex-end; gap: 10px; height: 190px; padding-top: 8px; }
+  .bar-col { flex: 1; display: flex; flex-direction: column; align-items: center; gap: 6px; }
+  .bar {
+    width: 100%; max-width: 46px; border-radius: 4px 4px 0 0;
+    background: #cdd6cf; position: relative;
+  }
+  .bar.spike { background: var(--danger); }
+  .bar .tip {
+    position: absolute; top: -19px; left: 50%; transform: translateX(-50%);
+    font-size: 10px; font-weight: 600; white-space: nowrap; color: var(--danger);
+  }
+  .bar-x { font-size: 10px; color: var(--muted); }
+  table { width: 100%; border-collapse: collapse; font-size: 13px; }
+  th {
+    text-align: left; font-size: 11px; text-transform: uppercase; letter-spacing: .05em;
+    color: var(--muted); padding: 9px 10px; border-bottom: 1px solid var(--line);
+  }
+  th.num, td.num { text-align: right; }
+  td { padding: 10px; border-bottom: 1px solid var(--line); }
+  tr:last-child td { border-bottom: none; }
+  tr.hot td { background: #fbecea; }
+  tr.hot td:first-child { font-weight: 600; }
+  .model { font-family: ui-monospace, "SF Mono", Menlo, monospace; font-size: 12px; }
+  .tag {
+    display: inline-block; font-size: 10px; font-weight: 600; padding: 2px 7px;
+    border-radius: 10px; background: var(--accent-soft); color: var(--accent);
+  }
+  .tag.danger { background: #fbe0dc; color: var(--danger); }
+  .foot { font-size: 11px; color: var(--muted); margin-top: 14px; }
+</style>
+</head>
+<body>
+
+<div class="topbar">
+  <div class="brand"><span class="mark">A</span> Anthropic Console</div>
+  <div class="org"><span>Northwind AI</span><span class="avatar">N</span></div>
+</div>
+
+<div class="wrap">
+  <h1>Cost</h1>
+  <div class="crumb">Organization · Northwind AI · Billing</div>
+
+  <div class="tabs">
+    <span>Overview</span>
+    <span class="active">Cost</span>
+    <span>Usage limits</span>
+    <span>Invoices</span>
+  </div>
+
+  <div class="filters">
+    <div class="pill"><span class="lbl">Workspace</span> prod-frontend <span class="caret">▾</span></div>
+    <div class="pill"><span class="lbl">Range</span> May 5 – May 19, 2026 <span class="caret">▾</span></div>
+    <div class="pill"><span class="lbl">Group by</span> Day <span class="caret">▾</span></div>
+  </div>
+
+  <div class="cards">
+    <div class="card">
+      <div class="k">Total cost</div>
+      <div class="v">$96.05</div>
+      <div class="sub up">▲ 312% vs. previous 15 days</div>
+    </div>
+    <div class="card">
+      <div class="k">Daily average</div>
+      <div class="v">$6.40</div>
+      <div class="sub flat">13-day baseline: $4.48 / day</div>
+    </div>
+    <div class="card">
+      <div class="k">Peak day</div>
+      <div class="v">$19.20</div>
+      <div class="sub up">May 18 — 4.3× baseline</div>
+    </div>
+  </div>
+
+  <div class="panel">
+    <h2>Daily cost — prod-frontend workspace</h2>
+    <div class="chart">
+      <div class="bar-col"><div class="bar" style="height:39px"></div><div class="bar-x">5/5</div></div>
+      <div class="bar-col"><div class="bar" style="height:36px"></div><div class="bar-x">5/6</div></div>
+      <div class="bar-col"><div class="bar" style="height:43px"></div><div class="bar-x">5/7</div></div>
+      <div class="bar-col"><div class="bar" style="height:46px"></div><div class="bar-x">5/8</div></div>
+      <div class="bar-col"><div class="bar" style="height:47px"></div><div class="bar-x">5/9</div></div>
+      <div class="bar-col"><div class="bar" style="height:35px"></div><div class="bar-x">5/10</div></div>
+      <div class="bar-col"><div class="bar" style="height:41px"></div><div class="bar-x">5/11</div></div>
+      <div class="bar-col"><div class="bar" style="height:44px"></div><div class="bar-x">5/12</div></div>
+      <div class="bar-col"><div class="bar" style="height:48px"></div><div class="bar-x">5/13</div></div>
+      <div class="bar-col"><div class="bar" style="height:40px"></div><div class="bar-x">5/14</div></div>
+      <div class="bar-col"><div class="bar" style="height:46px"></div><div class="bar-x">5/15</div></div>
+      <div class="bar-col"><div class="bar" style="height:37px"></div><div class="bar-x">5/16</div></div>
+      <div class="bar-col"><div class="bar" style="height:44px"></div><div class="bar-x">5/17</div></div>
+      <div class="bar-col"><div class="bar spike" style="height:180px"><span class="tip">$19.20</span></div><div class="bar-x">5/18</div></div>
+      <div class="bar-col"><div class="bar spike" style="height:175px"><span class="tip">$18.64</span></div><div class="bar-x">5/19</div></div>
+    </div>
+  </div>
+
+  <div class="panel">
+    <h2>Daily breakdown</h2>
+    <table>
+      <thead>
+        <tr>
+          <th>Date</th>
+          <th>Primary model</th>
+          <th class="num">API requests</th>
+          <th class="num">Input tokens</th>
+          <th class="num">Output tokens</th>
+          <th class="num">Cost (USD)</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr><td>2026-05-05</td><td><span class="model">claude-haiku-4-5</span></td><td class="num">462</td><td class="num">1.31M</td><td class="num">0.18M</td><td class="num">$4.12</td></tr>
+        <tr><td>2026-05-06</td><td><span class="model">claude-haiku-4-5</span></td><td class="num">431</td><td class="num">1.22M</td><td class="num">0.16M</td><td class="num">$3.88</td></tr>
+        <tr><td>2026-05-07</td><td><span class="model">claude-haiku-4-5</span></td><td class="num">498</td><td class="num">1.44M</td><td class="num">0.19M</td><td class="num">$4.56</td></tr>
+        <tr><td>2026-05-08</td><td><span class="model">claude-haiku-4-5</span></td><td class="num">524</td><td class="num">1.56M</td><td class="num">0.21M</td><td class="num">$4.91</td></tr>
+        <tr><td>2026-05-09</td><td><span class="model">claude-haiku-4-5</span></td><td class="num">539</td><td class="num">1.60M</td><td class="num">0.22M</td><td class="num">$5.02</td></tr>
+        <tr><td>2026-05-10</td><td><span class="model">claude-haiku-4-5</span></td><td class="num">417</td><td class="num">1.18M</td><td class="num">0.15M</td><td class="num">$3.74</td></tr>
+        <tr><td>2026-05-11</td><td><span class="model">claude-haiku-4-5</span></td><td class="num">471</td><td class="num">1.37M</td><td class="num">0.18M</td><td class="num">$4.33</td></tr>
+        <tr><td>2026-05-12</td><td><span class="model">claude-haiku-4-5</span></td><td class="num">502</td><td class="num">1.48M</td><td class="num">0.20M</td><td class="num">$4.68</td></tr>
+        <tr><td>2026-05-13</td><td><span class="model">claude-haiku-4-5</span></td><td class="num">547</td><td class="num">1.63M</td><td class="num">0.23M</td><td class="num">$5.14</td></tr>
+        <tr><td>2026-05-14</td><td><span class="model">claude-haiku-4-5</span></td><td class="num">459</td><td class="num">1.33M</td><td class="num">0.17M</td><td class="num">$4.27</td></tr>
+        <tr><td>2026-05-15</td><td><span class="model">claude-haiku-4-5</span></td><td class="num">521</td><td class="num">1.54M</td><td class="num">0.21M</td><td class="num">$4.89</td></tr>
+        <tr><td>2026-05-16</td><td><span class="model">claude-haiku-4-5</span></td><td class="num">438</td><td class="num">1.25M</td><td class="num">0.16M</td><td class="num">$3.96</td></tr>
+        <tr><td>2026-05-17</td><td><span class="model">claude-haiku-4-5</span></td><td class="num">503</td><td class="num">1.47M</td><td class="num">0.19M</td><td class="num">$4.71</td></tr>
+        <tr class="hot"><td>2026-05-18</td><td><span class="model">claude-sonnet-4-6</span> <span class="tag danger">model changed</span></td><td class="num">771</td><td class="num">2.34M</td><td class="num">0.41M</td><td class="num">$19.20</td></tr>
+        <tr class="hot"><td>2026-05-19</td><td><span class="model">claude-sonnet-4-6</span></td><td class="num">749</td><td class="num">2.27M</td><td class="num">0.39M</td><td class="num">$18.64</td></tr>
+      </tbody>
+    </table>
+    <div class="foot">Costs are estimated from token usage at list pricing. Final invoiced amounts may differ. Last updated 2026-05-19 14:22 UTC.</div>
+  </div>
+</div>
+
+</body>
+</html>

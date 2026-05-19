@@ -64,7 +64,7 @@ justifies the cost increase. Consider A/B testing or gradual rollout
 for future model changes.
 ```
 
-## Quickstart — Docker (Vultr / any VPS)
+## Quickstart — Docker (Cloud Run / any host)
 
 ```bash
 git clone https://github.com/Yatsuiii/llmtrace.git
@@ -73,7 +73,9 @@ cp .env.example .env          # add your GEMINI_API_KEY
 docker compose up -d
 ```
 
-Open `http://YOUR_SERVER_IP` — dashboard loads with demo data auto-seeded on first run.
+Open `http://localhost:8080` — dashboard loads with demo data auto-seeded on first run.
+
+Deployed on **Google Cloud Run** via `gcloud run deploy --source .` — the live demo above runs exactly this image.
 
 **Requirements:** Docker, a `GEMINI_API_KEY` (free tier at Google AI Studio).
 
@@ -139,8 +141,7 @@ The key difference: llmtrace is not a dashboard — it's an agent that *investig
 - **SQLite** — `modernc.org/sqlite` (pure Go, no CGo, single file)
 - **Gemini** — `google.golang.org/genai` SDK, tool-calling agent loop
 - **Chart.js** — cost trend chart with deploy annotation (CDN, no build pipeline)
-- **Caddy** — reverse proxy + auto TLS for production deploy
-- **Vultr** — VPS deployment target
+- **Google Cloud Run** — containerized production deploy (`gcloud run deploy --source .`)
 
 ## License
 

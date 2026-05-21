@@ -382,8 +382,8 @@ var dashboardTmpl = template.Must(template.New("dashboard").Parse(`<!DOCTYPE htm
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
 <style>
   :root {
-    --bg: #07080d;
-    --panel: rgba(20,22,32,0.66);
+    --bg: #0a0b10;
+    --panel: #101219;
     --inset: #0a0b11;
     --border: rgba(255,255,255,0.07);
     --border-lit: rgba(255,255,255,0.13);
@@ -395,7 +395,7 @@ var dashboardTmpl = template.Must(template.New("dashboard").Parse(`<!DOCTYPE htm
     --red: #ff6b6b;
     --green: #4ade80;
     --amber: #fbbf24;
-    --radius: 15px;
+    --radius: 10px;
     --mono: 'JetBrains Mono', 'Cascadia Code', monospace;
   }
   * { box-sizing: border-box; margin: 0; padding: 0; }
@@ -405,43 +405,33 @@ var dashboardTmpl = template.Must(template.New("dashboard").Parse(`<!DOCTYPE htm
     background: var(--bg); color: var(--text); min-height: 100vh;
     -webkit-font-smoothing: antialiased; position: relative; overflow-x: hidden;
   }
-  body::before {
-    content: ''; position: fixed; inset: 0; z-index: -1; pointer-events: none;
-    background:
-      radial-gradient(680px circle at 10% -8%, rgba(99,102,241,0.22), transparent 60%),
-      radial-gradient(740px circle at 94% 4%, rgba(154,134,255,0.15), transparent 55%),
-      radial-gradient(900px circle at 78% 102%, rgba(45,212,191,0.08), transparent 60%);
-  }
   ::selection { background: rgba(154,134,255,0.32); }
 
   .header { display: flex; align-items: center; gap: 12px;
     max-width: 1140px; margin: 0 auto; padding: 24px 32px 0; }
   .logo { font-size: 1.18rem; font-weight: 800; letter-spacing: -0.03em; color: #fff; }
-  .logo span { background: linear-gradient(92deg, var(--violet), var(--indigo));
-    -webkit-background-clip: text; background-clip: text; -webkit-text-fill-color: transparent; }
+  .logo span { color: var(--violet); }
   .header .ts { margin-left: auto; font-size: 0.76rem; color: var(--dim);
     font-variant-numeric: tabular-nums; }
 
   .hero { max-width: 1140px; margin: 0 auto; padding: 34px 32px 6px; }
   .hero .eyebrow { font-size: 0.72rem; font-weight: 700; letter-spacing: 0.17em;
     text-transform: uppercase; color: var(--violet); margin-bottom: 15px; }
-  .hero h1 { font-size: 2.75rem; font-weight: 800; letter-spacing: -0.038em; line-height: 1.07;
-    background: linear-gradient(178deg, #ffffff 32%, #b6b9cf);
-    -webkit-background-clip: text; background-clip: text; -webkit-text-fill-color: transparent; }
+  .hero h1 { font-size: 2.6rem; font-weight: 800; letter-spacing: -0.038em; line-height: 1.07;
+    color: #f4f5fa; }
   .hero p { margin-top: 15px; font-size: 1.02rem; color: var(--muted);
     max-width: 64ch; line-height: 1.62; }
 
   .kpi-row { max-width: 1140px; margin: 28px auto 4px; padding: 0 32px;
     display: grid; grid-template-columns: repeat(3,1fr); gap: 16px; }
-  .kpi { background: var(--panel); backdrop-filter: blur(16px);
-    -webkit-backdrop-filter: blur(16px); border: 1px solid var(--border);
+  .kpi { background: var(--panel); border: 1px solid var(--border);
     border-radius: var(--radius); padding: 18px 22px; position: relative; overflow: hidden;
-    transition: border-color 0.2s, transform 0.2s; }
-  .kpi:hover { border-color: var(--border-lit); transform: translateY(-2px); }
+    transition: border-color 0.2s; }
+  .kpi:hover { border-color: var(--border-lit); }
   .kpi::after { content: ''; position: absolute; left: 0; top: 0; bottom: 0; width: 3px; }
-  .kpi.k-spend::after { background: linear-gradient(var(--violet), var(--indigo)); }
-  .kpi.k-anom::after { background: var(--red); box-shadow: 0 0 16px var(--red); }
-  .kpi.k-act::after { background: var(--green); box-shadow: 0 0 16px rgba(74,222,128,0.65); }
+  .kpi.k-spend::after { background: var(--violet); }
+  .kpi.k-anom::after { background: var(--red); }
+  .kpi.k-act::after { background: var(--green); }
   .kpi .kpi-lbl { font-size: 0.69rem; font-weight: 700; letter-spacing: 0.09em;
     text-transform: uppercase; color: var(--dim); }
   .kpi .kpi-val { font-size: 2rem; font-weight: 800; margin-top: 7px;
@@ -454,24 +444,20 @@ var dashboardTmpl = template.Must(template.New("dashboard").Parse(`<!DOCTYPE htm
   .section-title { font-size: 0.72rem; font-weight: 700; text-transform: uppercase;
     letter-spacing: 0.13em; color: var(--dim); margin: 32px 0 14px;
     display: flex; align-items: center; gap: 9px; }
-  .section-title::before { content: ''; width: 16px; height: 2px; border-radius: 2px;
-    background: linear-gradient(90deg, var(--violet), transparent); }
+  .section-title::before { content: ''; width: 14px; height: 2px; border-radius: 2px;
+    background: var(--dim); }
 
-  .chart-wrap { background: var(--panel); backdrop-filter: blur(16px);
-    -webkit-backdrop-filter: blur(16px); border: 1px solid var(--border);
+  .chart-wrap { background: var(--panel); border: 1px solid var(--border);
     border-radius: var(--radius); padding: 22px 24px; margin-bottom: 26px; }
   .chart-wrap canvas { max-height: 270px; }
 
-  .anomaly-card { background: var(--panel); backdrop-filter: blur(16px);
-    -webkit-backdrop-filter: blur(16px); border: 1px solid rgba(255,107,107,0.22);
-    border-radius: var(--radius); padding: 20px 22px; margin-bottom: 12px;
-    box-shadow: 0 0 0 1px rgba(255,107,107,0.04), 0 14px 40px -20px rgba(255,107,107,0.4); }
+  .anomaly-card { background: var(--panel); border: 1px solid rgba(255,107,107,0.22);
+    border-left: 2px solid var(--red);
+    border-radius: var(--radius); padding: 20px 22px; margin-bottom: 12px; }
   .anomaly-card .top { display: flex; align-items: center; gap: 10px; margin-bottom: 14px; }
   .badge { font-size: 0.62rem; font-weight: 700; padding: 3px 8px; border-radius: 5px;
     text-transform: uppercase; letter-spacing: 0.06em;
     background: rgba(255,107,107,0.14); color: #ffb0b0; border: 1px solid rgba(255,107,107,0.3); }
-  .badge.autonomous { background: rgba(74,222,128,0.13); color: #9af0b8;
-    border-color: rgba(74,222,128,0.32); }
   .badge.critical { background: rgba(255,107,107,0.14); color: #ffb0b0;
     border-color: rgba(255,107,107,0.3); }
   .badge.high { background: rgba(251,191,36,0.14); color: #fcd575;
@@ -494,12 +480,10 @@ var dashboardTmpl = template.Must(template.New("dashboard").Parse(`<!DOCTYPE htm
   .metric .val.hot { color: var(--red); }
 
   .btn { margin-top: 16px; padding: 8px 16px; font-size: 0.82rem; font-weight: 600;
-    font-family: inherit; color: #fff; border: none; border-radius: 8px; cursor: pointer;
-    background: linear-gradient(135deg, var(--violet), var(--indigo));
-    box-shadow: 0 6px 20px -8px rgba(124,92,255,0.8); transition: transform 0.15s, box-shadow 0.15s; }
-  .btn:hover { transform: translateY(-1px); box-shadow: 0 10px 26px -8px rgba(124,92,255,0.95); }
-  .btn:active { transform: translateY(0); }
-  .btn:disabled { opacity: 0.45; cursor: default; transform: none; box-shadow: none; }
+    font-family: inherit; color: #fff; border: 1px solid var(--indigo); border-radius: 7px;
+    cursor: pointer; background: var(--indigo); transition: background 0.15s, border-color 0.15s; }
+  .btn:hover { background: #4f52d8; border-color: #4f52d8; }
+  .btn:disabled { opacity: 0.45; cursor: default; }
 
   .stream-box, .chat-output, .live-feed {
     background: var(--inset); border: 1px solid var(--border); border-radius: 10px;
@@ -509,8 +493,9 @@ var dashboardTmpl = template.Must(template.New("dashboard").Parse(`<!DOCTYPE htm
   .stream-box.visible { display: block; }
   .no-anomalies { color: var(--dim); padding: 18px 0; }
 
-  .projection { background: linear-gradient(135deg, rgba(251,191,36,0.08), rgba(251,191,36,0.02));
-    border: 1px solid rgba(251,191,36,0.28); border-radius: var(--radius);
+  .projection { background: var(--panel);
+    border: 1px solid rgba(251,191,36,0.28); border-left: 2px solid var(--amber);
+    border-radius: var(--radius);
     padding: 16px 22px; margin-bottom: 26px; display: flex; align-items: baseline;
     gap: 22px; flex-wrap: wrap; }
   .projection .lbl { font-size: 0.66rem; font-weight: 700; letter-spacing: 0.09em;
@@ -519,8 +504,7 @@ var dashboardTmpl = template.Must(template.New("dashboard").Parse(`<!DOCTYPE htm
     letter-spacing: -0.02em; }
   .projection .sub { font-size: 0.86rem; color: #c8b48f; }
 
-  .chat-box, .vision-panel { background: var(--panel); backdrop-filter: blur(16px);
-    -webkit-backdrop-filter: blur(16px); border: 1px solid var(--border);
+  .chat-box, .vision-panel { background: var(--panel); border: 1px solid var(--border);
     border-radius: var(--radius); padding: 20px 22px; margin-bottom: 26px; }
   .chat-input-row { display: flex; gap: 9px; }
   .chat-input-row input { flex: 1; background: var(--inset); border: 1px solid var(--border);
@@ -548,14 +532,14 @@ var dashboardTmpl = template.Must(template.New("dashboard").Parse(`<!DOCTYPE htm
     text-transform: uppercase; background: rgba(154,134,255,0.16); color: #c3b6ff;
     border: 1px solid rgba(154,134,255,0.32); padding: 3px 8px; border-radius: 5px; margin-left: 8px; }
 
-  .watcher-bar { background: linear-gradient(135deg, rgba(74,222,128,0.09), rgba(74,222,128,0.02));
-    border: 1px solid rgba(74,222,128,0.26); border-radius: var(--radius);
+  .watcher-bar { background: var(--panel);
+    border: 1px solid rgba(74,222,128,0.26); border-left: 2px solid var(--green);
+    border-radius: var(--radius);
     padding: 16px 22px; margin-bottom: 26px; display: flex; align-items: center;
     gap: 16px; flex-wrap: wrap; }
-  .watcher-bar .pulse { width: 9px; height: 9px; border-radius: 50%; background: var(--green);
-    box-shadow: 0 0 10px var(--green); animation: pulse 2s infinite; flex-shrink: 0; }
-  @keyframes pulse { 0%,100% { opacity:1; box-shadow: 0 0 10px var(--green); }
-    50% { opacity:0.35; box-shadow: 0 0 4px var(--green); } }
+  .watcher-bar .pulse { width: 8px; height: 8px; border-radius: 50%; background: var(--green);
+    animation: pulse 2s infinite; flex-shrink: 0; }
+  @keyframes pulse { 0%,100% { opacity:1; } 50% { opacity:0.35; } }
   .watcher-bar .label { font-size: 0.86rem; font-weight: 700; color: #9af0b8; }
   .watcher-bar .meta { font-size: 0.75rem; color: #6ee79a; opacity: 0.8;
     font-variant-numeric: tabular-nums; }
@@ -572,8 +556,7 @@ var dashboardTmpl = template.Must(template.New("dashboard").Parse(`<!DOCTYPE htm
   .live-feed .action { color: var(--amber); }
 
   .actions-table { width: 100%; border-collapse: collapse; font-size: 0.83rem;
-    margin-bottom: 26px; background: var(--panel); backdrop-filter: blur(16px);
-    -webkit-backdrop-filter: blur(16px); border: 1px solid var(--border);
+    margin-bottom: 26px; background: var(--panel); border: 1px solid var(--border);
     border-radius: var(--radius); overflow: hidden; }
   .actions-table th { text-align: left; color: var(--dim); font-size: 0.66rem; font-weight: 700;
     text-transform: uppercase; letter-spacing: 0.06em; padding: 12px 14px;
@@ -595,14 +578,13 @@ var dashboardTmpl = template.Must(template.New("dashboard").Parse(`<!DOCTYPE htm
 <body>
 <div class="header">
   <div class="logo">llm<span>trace</span></div>
-  {{if .Watcher.Active}}<span class="badge autonomous">● autonomous</span>{{end}}
   <span class="ts">{{.Now}}</span>
 </div>
 <div class="hero">
   <div class="eyebrow">Autonomous LLM-cost agent</div>
   <h1>Which deploy spiked your LLM bill?</h1>
   <p>llmtrace proxies your LLM traffic, detects per-key spend anomalies, and runs a Gemini
-     agent that traces every spike back to the exact pull request — then ships the fix.</p>
+     agent that traces every spike back to the exact pull request, then ships the fix.</p>
 </div>
 <div class="kpi-row">
   <div class="kpi k-spend">
@@ -627,7 +609,7 @@ var dashboardTmpl = template.Must(template.New("dashboard").Parse(`<!DOCTYPE htm
   <div class="watcher-bar">
     <div class="pulse"></div>
     <div>
-      <div class="label">Autonomous Agent — Active</div>
+      <div class="label">Autonomous Agent · Active</div>
       <div class="meta">scans: {{.Watcher.ScanCount}} · last: {{.Watcher.LastScan}} · next: {{.Watcher.NextScan}}</div>
     </div>
     <button class="live-btn" onclick="toggleLiveFeed(this)">Live Feed ▾</button>
@@ -641,7 +623,7 @@ var dashboardTmpl = template.Must(template.New("dashboard").Parse(`<!DOCTYPE htm
       <div class="lbl">PROJECTED MONTHLY SPEND · {{.Projection.Key}}</div>
       <div class="big">${{printf "%.0f" .Projection.MonthlyNow}}/mo</div>
     </div>
-    <div class="sub">baseline run-rate ${{printf "%.0f" .Projection.MonthlyBase}}/mo — this regression adds
+    <div class="sub">baseline run-rate ${{printf "%.0f" .Projection.MonthlyBase}}/mo. This regression adds
       <strong style="color:#f87171">+${{printf "%.0f" .Projection.Overspend}}/mo</strong> if left unfixed</div>
   </div>
   {{end}}
@@ -649,7 +631,7 @@ var dashboardTmpl = template.Must(template.New("dashboard").Parse(`<!DOCTYPE htm
   <div class="section-title">Investigate Any Dashboard <span class="vision-tag">Gemini Vision</span></div>
   <div class="vision-panel">
     <div class="vision-drop" id="visionDrop" onclick="document.getElementById('visionFile').click()">
-      <div class="hint" id="visionHint">Drop in a screenshot of <strong>any</strong> LLM billing dashboard — Anthropic, OpenAI, a Grafana panel.
+      <div class="hint" id="visionHint">Drop in a screenshot of <strong>any</strong> LLM billing dashboard: Anthropic, OpenAI, a Grafana panel.
         Gemini reads the spend off the image, then the agent finds which deploy caused the spike.</div>
     </div>
     <input type="file" id="visionFile" accept="image/*" style="display:none" onchange="visionPicked()">
@@ -657,7 +639,7 @@ var dashboardTmpl = template.Must(template.New("dashboard").Parse(`<!DOCTYPE htm
     <div class="chat-output" id="visionOutput"></div>
   </div>
 
-  <div class="section-title">Daily Spend — Last 30 Days</div>
+  <div class="section-title">Daily Spend · Last 30 Days</div>
   <div class="chart-wrap">
     <canvas id="costChart"></canvas>
   </div>
@@ -666,7 +648,7 @@ var dashboardTmpl = template.Must(template.New("dashboard").Parse(`<!DOCTYPE htm
   <div class="chat-box">
     <div class="chat-input-row">
       <input id="chatInput" type="text" autocomplete="off"
-        placeholder="Ask about your LLM spend — e.g. why did prod-frontend spike?"
+        placeholder="Ask about your LLM spend, e.g. why did prod-frontend spike?"
         onkeydown="if(event.key==='Enter')sendChat()">
       <button class="btn" style="margin-top:0" onclick="sendChat()">Ask</button>
     </div>
@@ -823,7 +805,7 @@ function visionPicked() {
   if (!f) return;
   document.getElementById('visionDrop').classList.add('has-file');
   document.getElementById('visionHint').innerHTML =
-    '<span class="fname">' + f.name + '</span> — ready to investigate';
+    '<span class="fname">' + f.name + '</span> · ready to investigate';
 }
 
 async function runVision() {

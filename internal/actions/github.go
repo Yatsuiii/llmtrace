@@ -11,6 +11,7 @@ import (
 	"io"
 	"net/http"
 	"os"
+	"regexp"
 	"strings"
 	"time"
 )
@@ -250,4 +251,104 @@ func OpenFixPR(ctx context.Context, cfg GitHubConfig, opts FixPROptions) (IssueR
 		return IssueResult{}, fmt.Errorf("parse pr response: %w", err)
 	}
 	return pr, nil
+}
+
+// DeployRun is a successful GitHub Actions workflow run treated as a deploy event.
+type DeployRun struct {
+	ID           int64
+	WorkflowName string
+	Branch       string
+	CommitSHA    string
+	Title        string
+	PRNumber     int
+	StartedAt    time.Time
+	CompletedAt  time.Time
+	Conclusion   string
+	URL          string
+}
+
+// ListDeployRuns returns successful workflow runs whose workflow name matches
+// pattern and which completed within [since, until]. Used to ingest real deploy
+// events into the ledger so anomalies can be correlated against them.
+func ListDeployRuns(ctx context.Context, cfg GitHubConfig, pattern string, since, until time.Time) ([]DeployRun, error) {
+	re, err := regexp.Compile(pattern)
+	if err != nil {
+		return nil, fmt.Errorf("invalid deploy workflow pattern %q: %w", pattern, err)
+	}
+	b, status, err := cfg.do(ctx, http.MethodGet,
+		fmt.Sprintf("/repos/%s/actions/runs?status=success&per_page=100", cfg.Repo), nil)
+	if err != nil {
+		return nil, err
+	}
+	if status >= 300 {
+		return nil, fmt.Errorf("list workflow runs %d: %s", status, string(b))
+	}
+	var resp struct {
+		WorkflowRuns []struct {
+			ID           int64   `json:"id"`
+			Name         string  `json:"name"`
+			HeadBranch   string  `json:"head_branch"`
+			HeadSHA      string  `json:"head_sha"`
+			RunStartedAt *string `json:"run_started_at"`
+			UpdatedAt    *string `json:"updated_at"`
+			Conclusion   string  `json:"conclusion"`
+			HTMLURL      string  `json:"html_url"`
+			HeadCommit   struct {
+				Message string `json:"message"`
+			} `json:"head_commit"`
+			PullRequests []struct {
+				Number int `json:"number"`
+			} `json:"pull_requests"`
+		} `json:"workflow_runs"`
+	}
+	if err := json.Unmarshal(b, &resp); err != nil {
+		return nil, fmt.Errorf("parse workflow runs: %w", err)
+	}
+	var out []DeployRun
+	for _, r := range resp.WorkflowRuns {
+		if !re.MatchString(r.Name) {
+			continue
+		}
+		started := parseGHTime(r.RunStartedAt)
+		completed := parseGHTime(r.UpdatedAt)
+		when := completed
+		if when.IsZero() {
+			when = started
+		}
+		if when.Before(since) || when.After(until) {
+			continue
+		}
+		title := firstLine(r.HeadCommit.Message)
+		if title == "" {
+			title = r.Name
+		}
+		pr := 0
+		if len(r.PullRequests) > 0 {
+			pr = r.PullRequests[0].Number
+		}
+		out = append(out, DeployRun{
+			ID: r.ID, WorkflowName: r.Name, Branch: r.HeadBranch, CommitSHA: r.HeadSHA,
+			Title: title, PRNumber: pr, StartedAt: started, CompletedAt: completed,
+			Conclusion: r.Conclusion, URL: r.HTMLURL,
+		})
+	}
+	return out, nil
+}
+
+func parseGHTime(s *string) time.Time {
+	if s == nil || *s == "" {
+		return time.Time{}
+	}
+	t, err := time.Parse(time.RFC3339, *s)
+	if err != nil {
+		return time.Time{}
+	}
+	return t
+}
+
+func firstLine(s string) string {
+	if i := strings.IndexByte(s, '\n'); i >= 0 {
+		return strings.TrimSpace(s[:i])
+	}
+	return strings.TrimSpace(s)
 }

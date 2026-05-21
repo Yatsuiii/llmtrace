@@ -54,15 +54,41 @@ func (db *DB) InsertAPIKey(ctx context.Context, k APIKeyRow) error {
 	return nil
 }
 
+// InsertDeploy upserts a deploy by ID, so re-ingesting the same workflow run
+// updates it in place rather than failing on the primary key.
 func (db *DB) InsertDeploy(ctx context.Context, d DeployRow) error {
 	_, err := db.conn.ExecContext(ctx,
-		`INSERT INTO deploys (id, repo, branch, commit_sha, pr_number, title, started_at, completed_at, status)
+		`INSERT OR REPLACE INTO deploys (id, repo, branch, commit_sha, pr_number, title, started_at, completed_at, status)
 		 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
 		d.ID, d.Repo, d.Branch, d.CommitSHA, d.PRNumber, d.Title,
 		d.StartedAt.UnixMilli(), d.CompletedAt.UnixMilli(), d.Status,
 	)
 	if err != nil {
 		return fmt.Errorf("insert deploy %s: %w", d.ID, err)
+	}
+	return nil
+}
+
+// GetCursor returns a stored sync cursor value, or "" if it has never been set.
+func (db *DB) GetCursor(ctx context.Context, name string) (string, error) {
+	var v string
+	err := db.conn.QueryRowContext(ctx,
+		`SELECT value FROM sync_cursors WHERE name = ?`, name).Scan(&v)
+	if err == sql.ErrNoRows {
+		return "", nil
+	}
+	if err != nil {
+		return "", fmt.Errorf("get cursor %s: %w", name, err)
+	}
+	return v, nil
+}
+
+// SetCursor stores a sync cursor value, overwriting any previous one.
+func (db *DB) SetCursor(ctx context.Context, name, value string) error {
+	_, err := db.conn.ExecContext(ctx,
+		`INSERT OR REPLACE INTO sync_cursors (name, value) VALUES (?, ?)`, name, value)
+	if err != nil {
+		return fmt.Errorf("set cursor %s: %w", name, err)
 	}
 	return nil
 }
@@ -300,6 +326,64 @@ func (db *DB) ListDeploys(ctx context.Context, since time.Time) ([]DeployRow, er
 		d.StartedAt = time.UnixMilli(startedMs).UTC()
 		d.CompletedAt = time.UnixMilli(completedMs).UTC()
 		out = append(out, d)
+	}
+	return out, rows.Err()
+}
+
+// ErrorRate returns total calls and errored calls (non-empty error_class) for a
+// key in [start, end). Used by correlation to detect post-deploy error spikes.
+func (db *DB) ErrorRate(ctx context.Context, apiKeyID string, start, end time.Time) (total, errors int64, err error) {
+	row := db.conn.QueryRowContext(ctx,
+		`SELECT COUNT(*), COALESCE(SUM(CASE WHEN error_class != '' THEN 1 ELSE 0 END), 0)
+		 FROM calls
+		 WHERE api_key_id = ? AND timestamp >= ? AND timestamp < ?`,
+		apiKeyID, start.UnixMilli(), end.UnixMilli(),
+	)
+	if err := row.Scan(&total, &errors); err != nil {
+		return 0, 0, fmt.Errorf("error rate for %s: %w", apiKeyID, err)
+	}
+	return total, errors, nil
+}
+
+type CorrelationRow struct {
+	AnomalyID  int64
+	DeployID   string
+	Confidence float64
+	Evidence   string // JSON-encoded []Evidence
+}
+
+// UpsertCorrelation stores a scored anomaly-to-deploy correlation, replacing any
+// prior score for the same pair.
+func (db *DB) UpsertCorrelation(ctx context.Context, c CorrelationRow) error {
+	_, err := db.conn.ExecContext(ctx,
+		`INSERT OR REPLACE INTO correlations (anomaly_id, deploy_id, confidence, evidence)
+		 VALUES (?, ?, ?, ?)`,
+		c.AnomalyID, c.DeployID, c.Confidence, c.Evidence,
+	)
+	if err != nil {
+		return fmt.Errorf("upsert correlation %d/%s: %w", c.AnomalyID, c.DeployID, err)
+	}
+	return nil
+}
+
+// ListCorrelations returns stored correlations for an anomaly, highest confidence first.
+func (db *DB) ListCorrelations(ctx context.Context, anomalyID int64) ([]CorrelationRow, error) {
+	rows, err := db.conn.QueryContext(ctx,
+		`SELECT anomaly_id, deploy_id, confidence, evidence
+		 FROM correlations WHERE anomaly_id = ? ORDER BY confidence DESC`,
+		anomalyID,
+	)
+	if err != nil {
+		return nil, fmt.Errorf("list correlations: %w", err)
+	}
+	defer rows.Close()
+	var out []CorrelationRow
+	for rows.Next() {
+		var c CorrelationRow
+		if err := rows.Scan(&c.AnomalyID, &c.DeployID, &c.Confidence, &c.Evidence); err != nil {
+			return nil, fmt.Errorf("scan correlation: %w", err)
+		}
+		out = append(out, c)
 	}
 	return out, rows.Err()
 }

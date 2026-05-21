@@ -137,8 +137,28 @@ GEMINI_API_KEY=xxx go run ./cmd/llmtrace serve
 ```
 llmtrace seed                        seed demo scenario into ledger
 llmtrace serve [--port 8080]         run dashboard + agent server
+llmtrace sync-deploys [--days 30]    ingest deploy events from GitHub Actions
 llmtrace anomalies [--days 30]       detect and list spend anomalies
+llmtrace correlate [--days 30]       match anomalies to deploys (scored lineage)
 llmtrace analyze [--days 30]         detect anomalies + AI investigation
+```
+
+`correlate` runs the deterministic matcher: for each anomaly it finds deploys in
+the window and scores each with an additive lineage rubric (model change 0.50,
+prompt change 0.30, error spike 0.15, time proximity 0.05), isolating the cause
+from innocent same-day deploys:
+
+```bash
+llmtrace correlate --days 30
+
+anomaly #31  →  deploy gha-2-summary-sonnet (PR #2) "switch summary endpoint to claude-sonnet"
+  confidence 0.55
+    [time_window]  completed 2026-05-03T14:12:00Z, within the anomaly window
+    [model_change] dominant model shifted claude-haiku to claude-sonnet (87% of post-deploy calls)
+
+anomaly #31  →  deploy gha-1-deps-bump (PR #1) "bump anthropic SDK to 0.45"
+  confidence 0.05
+    [time_window]  time proximity only
 ```
 
 `analyze` streams the full agent investigation to stdout, no browser needed:
@@ -166,6 +186,8 @@ detected 2 anomaly(ies)
 | `internal/proxy` | HTTP reverse proxy. Forwards to Anthropic and OpenAI, records call telemetry. |
 | `internal/storage` | SQLite ledger via `modernc.org/sqlite`. Tables for calls, API keys, anomalies, deploys, correlations. |
 | `internal/detect` | Rolling 7-day baseline plus σ-threshold anomaly detection. |
+| `internal/deploys` | GitHub Actions ingestion. Maps successful workflow runs to deploy events. |
+| `internal/correlate` | Deterministic anomaly-to-deploy matcher with additive lineage scoring. |
 | `internal/agent` | Gemini multi-turn tool-calling agent. Autonomous causal investigation. |
 | `internal/web` | Dashboard (Chart.js cost trend with deploy markers) and SSE investigation stream. |
 | `internal/seed` | Deterministic demo scenario seeder, reproducible with fixed RNG. |
@@ -174,9 +196,13 @@ detected 2 anomaly(ies)
 
 ## Roadmap
 
-`llmtrace` is in active development. The single-tenant MVP is shipped and live. Next milestones:
+`llmtrace` is in active development. Shipped:
 
-- **v0.2 · Real deploy correlation.** Replace the seeded deploy table with live GitHub Actions ingestion. Time-window matcher plus lineage scoring (model_change, prompt_change, error_spike) with additive-capped confidence.
+- **v0.1 · MVP.** Proxy, ledger, per-key anomaly detection, Gemini investigation agent, autonomous watcher, live on Cloud Run.
+- **v0.2 · Deploy correlation.** Live GitHub Actions ingestion (`sync-deploys`) into the deploy ledger, plus a deterministic time-window matcher with additive lineage scoring (`correlate`) that isolates the causing deploy from innocent same-day neighbors.
+
+Next:
+
 - **v0.3 · Multi-provider depth.** First-class OpenAI parser (already stubbed), then Bedrock InvokeModel.
 - **v0.4 · Anomaly memory.** Embed every resolved anomaly and its root-cause PR. Similarity search over past incidents so the agent can say *"this looks like the spike from April 18, same author, same prompt, fixed by reverting deploy X."*
 - **v0.5 · Forecast mode.** Convert rolling baselines into per-key spend forecasts. Predict which keys will blow budget within the hour, not just flag after the fact.
@@ -191,7 +217,7 @@ This is an MVP. Things to know before relying on it:
 
 - **Single-tenant.** No per-tenant isolation. Run one instance per team.
 - **Anthropic-first parsing.** OpenAI is supported but with less testing on streaming edge cases. Bedrock is not yet implemented.
-- **Deploy correlation in MVP is seeded, not live.** The live GitHub Actions ingestion is v0.2 work (see roadmap). Today the agent reasons against a pre-populated deploy table.
+- **Deploy correlation runs live or from the demo seed.** `sync-deploys` ingests real GitHub Actions runs; the bundled demo uses a seeded deploy table so the attribution is reproducible offline. PR linkage currently derives from the run's head commit, so mapping a run to its exact triggering PR is a known refinement.
 - **Pricing is hardcoded** in `internal/pricing/rates.go` and needs manual updates when providers change rates.
 - **SSE streaming is single-process.** No horizontal-scaling story for the dashboard yet.
 - **Production security needs work.** TLS-required mode exists but inbound API key rotation is manual. Don't run on a public IP without a reverse-proxy in front.

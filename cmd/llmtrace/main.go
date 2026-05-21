@@ -10,6 +10,8 @@ import (
 
 	"github.com/Yatsuiii/llmtrace/internal/actions"
 	"github.com/Yatsuiii/llmtrace/internal/agent"
+	"github.com/Yatsuiii/llmtrace/internal/correlate"
+	"github.com/Yatsuiii/llmtrace/internal/deploys"
 	"github.com/Yatsuiii/llmtrace/internal/detect"
 	"github.com/Yatsuiii/llmtrace/internal/seed"
 	"github.com/Yatsuiii/llmtrace/internal/storage"
@@ -34,6 +36,8 @@ func main() {
 		cmdExplain(),
 		cmdReport(),
 		cmdSeed(),
+		cmdSyncDeploys(),
+		cmdCorrelate(),
 	)
 	if err := root.Execute(); err != nil {
 		os.Exit(1)
@@ -91,6 +95,81 @@ func cmdSeed() *cobra.Command {
 		},
 	}
 	cmd.Flags().StringVar(&path, "db", "llmtrace.db", "path to SQLite ledger")
+	return cmd
+}
+
+func cmdSyncDeploys() *cobra.Command {
+	var dbPath string
+	var days int
+	cmd := &cobra.Command{
+		Use:   "sync-deploys",
+		Short: "Ingest deploy events from GitHub Actions into the ledger",
+		Long: "Pulls successful workflow runs matching DEPLOY_WORKFLOW_PATTERN (default \"deploy.*\") " +
+			"from the repo in GITHUB_REPO and records them as deploy events. Requires GITHUB_TOKEN.",
+		RunE: func(cmd *cobra.Command, args []string) error {
+			ctx := context.Background()
+			db, err := storage.Open(dbPath)
+			if err != nil {
+				return err
+			}
+			defer db.Close()
+
+			gh := actions.GitHubFromEnv()
+			if !gh.Enabled() {
+				return fmt.Errorf("set GITHUB_TOKEN and GITHUB_REPO to ingest deploys")
+			}
+			n, err := deploys.Sync(ctx, db, gh, os.Getenv("DEPLOY_WORKFLOW_PATTERN"),
+				time.Duration(days)*24*time.Hour)
+			if err != nil {
+				return err
+			}
+			fmt.Printf("ingested %d deploy(s) from %s into %s\n", n, gh.Repo, dbPath)
+			return nil
+		},
+	}
+	cmd.Flags().StringVar(&dbPath, "db", "llmtrace.db", "path to SQLite ledger")
+	cmd.Flags().IntVar(&days, "days", 30, "lookback window in days")
+	return cmd
+}
+
+func cmdCorrelate() *cobra.Command {
+	var dbPath string
+	var days int
+	cmd := &cobra.Command{
+		Use:   "correlate",
+		Short: "Match spend anomalies to the deploys that likely caused them",
+		RunE: func(cmd *cobra.Command, args []string) error {
+			ctx := context.Background()
+			db, err := storage.Open(dbPath)
+			if err != nil {
+				return err
+			}
+			defer db.Close()
+
+			since := time.Now().UTC().AddDate(0, 0, -days)
+			if _, err := detect.Run(ctx, db, detect.DefaultConfig(), since); err != nil {
+				return err
+			}
+			results, err := correlate.Run(ctx, db, correlate.DefaultConfig(), since)
+			if err != nil {
+				return err
+			}
+			if len(results) == 0 {
+				fmt.Println("no anomaly/deploy correlations found")
+				return nil
+			}
+			for _, r := range results {
+				fmt.Printf("\nanomaly #%d  →  deploy %s (PR #%d) %q\n", r.AnomalyID, r.Deploy.ID, r.Deploy.PRNumber, r.Deploy.Title)
+				fmt.Printf("  confidence %.2f\n", r.Confidence)
+				for _, e := range r.Evidence {
+					fmt.Printf("    [%s] %s\n", e.Kind, e.Description)
+				}
+			}
+			return nil
+		},
+	}
+	cmd.Flags().StringVar(&dbPath, "db", "llmtrace.db", "path to SQLite ledger")
+	cmd.Flags().IntVar(&days, "days", 30, "lookback window in days")
 	return cmd
 }
 

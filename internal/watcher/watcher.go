@@ -14,19 +14,23 @@ import (
 
 	"github.com/Yatsuiii/llmtrace/internal/actions"
 	"github.com/Yatsuiii/llmtrace/internal/agent"
+	"github.com/Yatsuiii/llmtrace/internal/correlate"
+	"github.com/Yatsuiii/llmtrace/internal/deploys"
 	"github.com/Yatsuiii/llmtrace/internal/detect"
 	"github.com/Yatsuiii/llmtrace/internal/storage"
 )
 
 type Config struct {
-	Interval     time.Duration
-	LookbackDays int
+	Interval      time.Duration
+	LookbackDays  int
+	DeployPattern string
 }
 
 func DefaultConfig() Config {
 	return Config{
-		Interval:     15 * time.Minute,
-		LookbackDays: 30,
+		Interval:      15 * time.Minute,
+		LookbackDays:  30,
+		DeployPattern: deploys.DefaultPattern,
 	}
 }
 
@@ -39,9 +43,9 @@ type Watcher struct {
 	mu   sync.Mutex
 	subs []chan string
 
-	LastScan   time.Time
-	NextScan   time.Time
-	ScanCount  int
+	LastScan  time.Time
+	NextScan  time.Time
+	ScanCount int
 }
 
 func New(db *storage.DB, inv *agent.Investigator, gh actions.GitHubConfig, cfg Config) *Watcher {
@@ -110,6 +114,16 @@ func (w *Watcher) tick(ctx context.Context) {
 
 	w.emit(fmt.Sprintf("[watcher] scan #%d started — %s", w.ScanCount, now.Format("15:04:05 UTC")))
 
+	// Refresh deploy events from GitHub Actions so correlation has live data.
+	if w.gh.Enabled() {
+		lookback := time.Duration(w.cfg.LookbackDays) * 24 * time.Hour
+		if n, err := deploys.Sync(ctx, w.db, w.gh, w.cfg.DeployPattern, lookback); err != nil {
+			w.emit(fmt.Sprintf("[watcher] deploy sync error: %v", err))
+		} else if n > 0 {
+			w.emit(fmt.Sprintf("[watcher] synced %d deploy(s) from GitHub", n))
+		}
+	}
+
 	since := now.AddDate(0, 0, -w.cfg.LookbackDays)
 	anomalies, err := detect.Run(ctx, w.db, detect.DefaultConfig(), since)
 	if err != nil {
@@ -131,6 +145,12 @@ func (w *Watcher) tick(ctx context.Context) {
 		if id, ok := idMap[anomalies[i].APIKeyID+"|"+anomalies[i].Date]; ok {
 			anomalies[i].ID = id
 		}
+	}
+
+	// Persist deterministic anomaly→deploy correlations for the dashboard and
+	// to ground the agent's narrative in a scored lineage.
+	if _, err := correlate.Run(ctx, w.db, correlate.DefaultConfig(), since); err != nil {
+		w.emit(fmt.Sprintf("[watcher] correlation error: %v", err))
 	}
 
 	if len(anomalies) == 0 {

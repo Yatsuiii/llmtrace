@@ -1,6 +1,6 @@
 # llmtrace
 
-**Autonomous FinOps co-pilot for LLM-powered apps.** Finds the deploy that spiked your LLM bill, and explains why with evidence.
+**Self-hosted observability for AI agents.** Records every LLM call your agents make. Detects cost spikes and latency regressions. Names the deploy that caused them.
 
 [![live demo](https://img.shields.io/badge/live%20demo-online-brightgreen)](https://llmtrace-681081536857.asia-south1.run.app) ![go](https://img.shields.io/badge/go-1.22-00ADD8?logo=go) ![license](https://img.shields.io/badge/license-MIT-blue) ![status](https://img.shields.io/badge/status-active%20development-orange)
 
@@ -19,11 +19,13 @@ anomaly  key=prod-frontend  2026-05-03  $12.92 vs $4.68 baseline  (+$8.24, 28σ)
 
 ## The problem
 
-Every team shipping AI features eventually asks the same question: *"Why did our LLM spend double last week?"*
+When an agent starts costing more, taking longer, or behaving differently, the first question is always the same: *what shipped?*
 
-Existing tools (Helicone, Portkey, Langfuse, LiteLLM) will show you *that* spend went up. None of them tell you *what shipped* that made it go up. The deploy-to-spend join is the same gap [costtrace](https://github.com/Yatsuiii/costtrace) closes for AWS cost. Nobody had closed it for LLM cost.
+Existing observability tools (Helicone, Portkey, Langfuse, LiteLLM) show you the symptom. They don't connect it to the deploy. So you spend a Tuesday morning bisecting commits by hand, looking for the PR that flipped a model, rewrote a prompt, or added a retry loop.
 
-`llmtrace` does the join. It records every LLM call through a self-hosted proxy, detects per-key spend anomalies on a rolling baseline, correlates them to GitHub Actions deploy events in a time window, then dispatches an autonomous Gemini agent to reason over the evidence and name the responsible pull request with a confidence score.
+`llmtrace` makes that join automatic. It sits in front of your agents as a self-hosted proxy and records every LLM call: tokens, cost, latency, model, prompt fingerprint, the lot. A rolling baseline flags spikes per API key. A Gemini agent then walks the ledger, pulls the GitHub deploys in the window, diffs the model and prompt mix before and after each one, and names the responsible PR with a confidence score and the evidence it used.
+
+Cost spikes are the loudest signal. They're not the only one. Same join, different question: which deploy added 800ms to your p95? Which deploy changed what your summarizer actually says?
 
 > Live demo: **https://llmtrace-681081536857.asia-south1.run.app**
 > Deployed on Google Cloud Run. Autonomous agent runs on Gemini 2.0 Flash.
@@ -56,9 +58,9 @@ Your LLM calls  ─►  llmtrace proxy  ─►  Anthropic / OpenAI
 
 ---
 
-## Demo scenario
+## Demo: the cost-spike question
 
-A team's summary endpoint was silently switched from `claude-haiku` to `claude-sonnet` in PR #129. The new prompt added a retry loop on top, pushing call volume up 60%. Daily spend on the `prod-frontend` key jumped from **$4.56 to $19.20** overnight. That's a 4.2× spike, 28σ above baseline.
+This is the canonical scenario. A team's summary endpoint was silently switched from `claude-haiku` to `claude-sonnet` in PR #129. The new prompt added a retry loop on top, pushing call volume up 60%. Daily spend on the `prod-frontend` key jumped from **$4.56 to $19.20** overnight. That's a 4.2× spike, 28σ above baseline.
 
 The agent finds it in three tool calls:
 
@@ -93,15 +95,15 @@ for future model changes.
 
 ## Why not Helicone / Portkey / Langfuse / LiteLLM?
 
-| Tool | Shape | Does deploy-to-spend join? |
+| Tool | Shape | Joins agent behavior to deploys? |
 |---|---|:-:|
 | Helicone | Hosted observability + caching | no |
 | Portkey | AI gateway with routing | no |
 | LiteLLM | Open-source proxy | no |
 | Langfuse | LLM observability platform | no |
-| **llmtrace** | **Self-hosted gateway with an autonomous causal agent** | **yes** |
+| **llmtrace** | **Self-hosted gateway with a causal investigation agent** | **yes** |
 
-The wedge in one sentence: *deploy-to-LLM-spend causality with zero hosted-SaaS dependency.* The architectural pattern is borrowed from [costtrace](https://github.com/Yatsuiii/costtrace), where it does the same job for AWS cost, and applied to a different domain.
+The wedge in one sentence: *deploy-causal observability for AI agents, with zero hosted-SaaS dependency.* The pattern was borrowed from [costtrace](https://github.com/Yatsuiii/costtrace), which does the same job for AWS cost.
 
 ---
 
@@ -206,6 +208,8 @@ Next:
 - **v0.3 · Multi-provider depth.** First-class OpenAI parser (already stubbed), then Bedrock InvokeModel.
 - **v0.4 · Anomaly memory.** Embed every resolved anomaly and its root-cause PR. Similarity search over past incidents so the agent can say *"this looks like the spike from April 18, same author, same prompt, fixed by reverting deploy X."*
 - **v0.5 · Forecast mode.** Convert rolling baselines into per-key spend forecasts. Predict which keys will blow budget within the hour, not just flag after the fact.
+- **v0.6 · Latency and behavior signals.** Same causal join, applied to p95 latency regressions and prompt-output drift, not just cost. Deploy-to-behavior, not just deploy-to-spend.
+- **vNext · Durable agent runs.** The natural arc: from observing other people's agents to giving them somewhere to live. Job execution backed by [rivet](https://github.com/Yatsuiii/rivet) (Postgres task queue, already shipped), so agent runs survive crashes and restarts. Earliest this happens is when customers ask for it.
 
 Out of scope (explicit): multi-tenant SaaS, web UI dashboard polish beyond the current minimum, caching layer (that's Helicone/Portkey territory), prompt routing.
 

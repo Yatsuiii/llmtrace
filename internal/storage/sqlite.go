@@ -511,3 +511,108 @@ type DeployRow struct {
 	CompletedAt time.Time
 	Status      string
 }
+
+func (db *DB) ListAPIKeys(ctx context.Context) ([]APIKeyRow, error) {
+	rows, err := db.conn.QueryContext(ctx,
+		`SELECT id, hashed_key, label, budget_usd, rate_limit_rpm, active, created_at FROM api_keys ORDER BY created_at`)
+	if err != nil {
+		return nil, fmt.Errorf("list api_keys: %w", err)
+	}
+	defer rows.Close()
+	var out []APIKeyRow
+	for rows.Next() {
+		var k APIKeyRow
+		var active int
+		var createdMs int64
+		if err := rows.Scan(&k.ID, &k.HashedKey, &k.Label, &k.BudgetUSD, &k.RateLimitRPM, &active, &createdMs); err != nil {
+			return nil, fmt.Errorf("scan api_key: %w", err)
+		}
+		k.Active = active == 1
+		k.CreatedAt = time.UnixMilli(createdMs).UTC()
+		out = append(out, k)
+	}
+	return out, rows.Err()
+}
+
+func (db *DB) SetAPIKeyActive(ctx context.Context, keyID string, active bool) error {
+	v := 0
+	if active {
+		v = 1
+	}
+	_, err := db.conn.ExecContext(ctx, `UPDATE api_keys SET active = ? WHERE id = ?`, v, keyID)
+	return err
+}
+
+func (db *DB) GetAnomaly(ctx context.Context, id int64) (AnomalyRow, error) {
+	var a AnomalyRow
+	var detectedMs int64
+	err := db.conn.QueryRowContext(ctx,
+		`SELECT id, detected_at, api_key_id, date, metric, baseline_value, actual_value, delta, sigma, sample_size
+		 FROM anomalies WHERE id = ?`, id,
+	).Scan(&a.ID, &detectedMs, &a.APIKeyID, &a.Date, &a.Metric,
+		&a.BaselineValue, &a.ActualValue, &a.Delta, &a.Sigma, &a.SampleSize)
+	if err != nil {
+		return a, fmt.Errorf("get anomaly %d: %w", id, err)
+	}
+	a.DetectedAt = time.UnixMilli(detectedMs).UTC()
+	return a, nil
+}
+
+func (db *DB) CallSummary(ctx context.Context, since time.Time) ([]CallSummaryRow, error) {
+	rows, err := db.conn.QueryContext(ctx,
+		`SELECT api_key_id, model, COUNT(*) AS calls, SUM(input_tokens) AS input_tokens,
+		        SUM(output_tokens) AS output_tokens, SUM(cost_usd) AS cost_usd,
+		        AVG(latency_ms) AS avg_latency_ms
+		 FROM calls WHERE timestamp >= ?
+		 GROUP BY api_key_id, model ORDER BY cost_usd DESC`,
+		since.UnixMilli(),
+	)
+	if err != nil {
+		return nil, fmt.Errorf("call summary: %w", err)
+	}
+	defer rows.Close()
+	var out []CallSummaryRow
+	for rows.Next() {
+		var r CallSummaryRow
+		if err := rows.Scan(&r.APIKeyID, &r.Model, &r.Calls, &r.InputTokens, &r.OutputTokens, &r.CostUSD, &r.AvgLatencyMs); err != nil {
+			return nil, fmt.Errorf("scan summary: %w", err)
+		}
+		out = append(out, r)
+	}
+	return out, rows.Err()
+}
+
+func (db *DB) RecentCalls(ctx context.Context, limit int) ([]CallRow, error) {
+	rows, err := db.conn.QueryContext(ctx,
+		`SELECT id, timestamp, api_key_id, provider, model, endpoint,
+		        input_tokens, output_tokens, cost_usd, latency_ms, status, error_class, prompt_hash, session_id
+		 FROM calls ORDER BY timestamp DESC LIMIT ?`, limit,
+	)
+	if err != nil {
+		return nil, fmt.Errorf("recent calls: %w", err)
+	}
+	defer rows.Close()
+	var out []CallRow
+	for rows.Next() {
+		var c CallRow
+		var tsMs int64
+		if err := rows.Scan(&c.ID, &tsMs, &c.APIKeyID, &c.Provider, &c.Model, &c.Endpoint,
+			&c.InputTokens, &c.OutputTokens, &c.CostUSD, &c.LatencyMs, &c.Status, &c.ErrorClass,
+			&c.PromptHash, &c.SessionID); err != nil {
+			return nil, fmt.Errorf("scan call: %w", err)
+		}
+		c.Timestamp = time.UnixMilli(tsMs).UTC()
+		out = append(out, c)
+	}
+	return out, rows.Err()
+}
+
+type CallSummaryRow struct {
+	APIKeyID     string
+	Model        string
+	Calls        int64
+	InputTokens  int64
+	OutputTokens int64
+	CostUSD      float64
+	AvgLatencyMs float64
+}

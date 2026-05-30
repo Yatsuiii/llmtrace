@@ -2,8 +2,12 @@ package main
 
 import (
 	"context"
+	"crypto/rand"
+	"encoding/hex"
 	"fmt"
 	"os"
+	"strconv"
+	"text/tabwriter"
 	"time"
 
 	"github.com/spf13/cobra"
@@ -176,9 +180,36 @@ func cmdCorrelate() *cobra.Command {
 func cmdInit() *cobra.Command {
 	return &cobra.Command{
 		Use:   "init",
-		Short: "Interactive setup → config.toml",
+		Short: "Write a starter config.toml",
 		RunE: func(cmd *cobra.Command, args []string) error {
-			return notImplemented("init")
+			const cfg = `[proxy]
+listen = "0.0.0.0:8080"
+
+[providers.anthropic]
+upstream_key_env = "ANTHROPIC_API_KEY"
+
+[github]
+repo = ""
+token_env = "GITHUB_TOKEN"
+deploy_workflow_pattern = "deploy.*"
+
+[detection]
+baseline_days = 7
+sigma_threshold = 2.5
+min_delta_usd = 5
+
+[output]
+format = "text"
+`
+			const path = "config.toml"
+			if _, err := os.Stat(path); err == nil {
+				return fmt.Errorf("%s already exists", path)
+			}
+			if err := os.WriteFile(path, []byte(cfg), 0644); err != nil {
+				return err
+			}
+			fmt.Printf("wrote %s — set ANTHROPIC_API_KEY and run: llmtrace serve\n", path)
+			return nil
 		},
 	}
 }
@@ -275,58 +306,182 @@ func mustInvestigator(db *storage.DB) *agent.Investigator {
 }
 
 func cmdKeys() *cobra.Command {
-	cmd := &cobra.Command{
-		Use:   "keys",
-		Short: "Manage inbound API keys",
+	var dbPath string
+	cmd := &cobra.Command{Use: "keys", Short: "Manage inbound API keys"}
+	cmd.PersistentFlags().StringVar(&dbPath, "db", "llmtrace.db", "path to SQLite ledger")
+
+	addCmd := &cobra.Command{
+		Use:   "add",
+		Short: "Mint a new API key",
+		RunE: func(cmd *cobra.Command, args []string) error {
+			label, _ := cmd.Flags().GetString("label")
+			ctx := context.Background()
+			db, err := storage.Open(dbPath)
+			if err != nil {
+				return err
+			}
+			defer db.Close()
+			raw := make([]byte, 24)
+			if _, err := rand.Read(raw); err != nil {
+				return err
+			}
+			key := "lt-" + hex.EncodeToString(raw)
+			id := key[:10]
+			if err := db.InsertAPIKey(ctx, storage.APIKeyRow{
+				ID:        id,
+				HashedKey: key,
+				Label:     label,
+				Active:    true,
+				CreatedAt: time.Now().UTC(),
+			}); err != nil {
+				return err
+			}
+			fmt.Printf("key id:  %s\nkey:     %s\nlabel:   %s\n\nSet X-Llmtrace-Key: %s on your requests.\n", id, key, label, id)
+			return nil
+		},
 	}
-	cmd.AddCommand(
-		&cobra.Command{
-			Use:   "add",
-			Short: "Mint a new API key",
-			RunE: func(cmd *cobra.Command, args []string) error {
-				return notImplemented("keys add")
-			},
+	addCmd.Flags().String("label", "", "human-readable label for this key")
+
+	listCmd := &cobra.Command{
+		Use:   "list",
+		Short: "List API keys",
+		RunE: func(cmd *cobra.Command, args []string) error {
+			ctx := context.Background()
+			db, err := storage.Open(dbPath)
+			if err != nil {
+				return err
+			}
+			defer db.Close()
+			keys, err := db.ListAPIKeys(ctx)
+			if err != nil {
+				return err
+			}
+			if len(keys) == 0 {
+				fmt.Println("no keys — run: llmtrace keys add --label dev")
+				return nil
+			}
+			tw := tabwriter.NewWriter(os.Stdout, 0, 0, 2, ' ', 0)
+			fmt.Fprintln(tw, "ID\tLABEL\tACTIVE\tRPM\tBUDGET\tCREATED")
+			for _, k := range keys {
+				budget := "unlimited"
+				if k.BudgetUSD > 0 {
+					budget = fmt.Sprintf("$%.2f", k.BudgetUSD)
+				}
+				rpm := "unlimited"
+				if k.RateLimitRPM > 0 {
+					rpm = strconv.Itoa(k.RateLimitRPM)
+				}
+				active := "yes"
+				if !k.Active {
+					active = "no"
+				}
+				fmt.Fprintf(tw, "%s\t%s\t%s\t%s\t%s\t%s\n",
+					k.ID, k.Label, active, rpm, budget, k.CreatedAt.Format("2006-01-02"))
+			}
+			return tw.Flush()
 		},
-		&cobra.Command{
-			Use:   "list",
-			Short: "List API keys",
-			RunE: func(cmd *cobra.Command, args []string) error {
-				return notImplemented("keys list")
-			},
+	}
+
+	revokeCmd := &cobra.Command{
+		Use:   "revoke <key-id>",
+		Short: "Revoke an API key",
+		Args:  cobra.ExactArgs(1),
+		RunE: func(cmd *cobra.Command, args []string) error {
+			ctx := context.Background()
+			db, err := storage.Open(dbPath)
+			if err != nil {
+				return err
+			}
+			defer db.Close()
+			if err := db.SetAPIKeyActive(ctx, args[0], false); err != nil {
+				return err
+			}
+			fmt.Printf("revoked %s\n", args[0])
+			return nil
 		},
-		&cobra.Command{
-			Use:   "revoke <key-id>",
-			Short: "Revoke an API key",
-			Args:  cobra.ExactArgs(1),
-			RunE: func(cmd *cobra.Command, args []string) error {
-				return notImplemented("keys revoke")
-			},
-		},
-	)
+	}
+
+	cmd.AddCommand(addCmd, listCmd, revokeCmd)
 	return cmd
 }
 
 func cmdStats() *cobra.Command {
 	var days int
+	var dbPath string
 	cmd := &cobra.Command{
 		Use:   "stats",
 		Short: "Ledger summary by key/model",
 		RunE: func(cmd *cobra.Command, args []string) error {
-			return notImplemented("stats")
+			ctx := context.Background()
+			db, err := storage.Open(dbPath)
+			if err != nil {
+				return err
+			}
+			defer db.Close()
+			since := time.Now().UTC().AddDate(0, 0, -days)
+			rows, err := db.CallSummary(ctx, since)
+			if err != nil {
+				return err
+			}
+			if len(rows) == 0 {
+				fmt.Printf("no calls in the last %d days\n", days)
+				return nil
+			}
+			fmt.Printf("call summary — last %d days\n\n", days)
+			tw := tabwriter.NewWriter(os.Stdout, 0, 0, 2, ' ', 0)
+			fmt.Fprintln(tw, "KEY\tMODEL\tCALLS\tINPUT TOKENS\tOUTPUT TOKENS\tCOST USD\tAVG LATENCY")
+			var totalCost float64
+			for _, r := range rows {
+				totalCost += r.CostUSD
+				fmt.Fprintf(tw, "%s\t%s\t%d\t%d\t%d\t$%.4f\t%dms\n",
+					r.APIKeyID, r.Model, r.Calls, r.InputTokens, r.OutputTokens, r.CostUSD, int(r.AvgLatencyMs))
+			}
+			tw.Flush()
+			fmt.Printf("\ntotal cost: $%.4f\n", totalCost)
+			return nil
 		},
 	}
 	cmd.Flags().IntVar(&days, "days", 7, "window in days")
+	cmd.Flags().StringVar(&dbPath, "db", "llmtrace.db", "path to SQLite ledger")
 	return cmd
 }
 
 func cmdTail() *cobra.Command {
-	return &cobra.Command{
+	var dbPath string
+	var n int
+	cmd := &cobra.Command{
 		Use:   "tail",
-		Short: "Live request stream",
+		Short: "Print the most recent LLM calls from the ledger",
 		RunE: func(cmd *cobra.Command, args []string) error {
-			return notImplemented("tail")
+			ctx := context.Background()
+			db, err := storage.Open(dbPath)
+			if err != nil {
+				return err
+			}
+			defer db.Close()
+			calls, err := db.RecentCalls(ctx, n)
+			if err != nil {
+				return err
+			}
+			if len(calls) == 0 {
+				fmt.Println("no calls in ledger yet")
+				return nil
+			}
+			for _, c := range calls {
+				status := ""
+				if c.ErrorClass != "" {
+					status = " [" + c.ErrorClass + "]"
+				}
+				fmt.Printf("%s  %-18s  %-30s  in:%-6d  out:%-6d  $%.4f  %dms%s\n",
+					c.Timestamp.Format("15:04:05"), c.APIKeyID, c.Model,
+					c.InputTokens, c.OutputTokens, c.CostUSD, c.LatencyMs, status)
+			}
+			return nil
 		},
 	}
+	cmd.Flags().StringVar(&dbPath, "db", "llmtrace.db", "path to SQLite ledger")
+	cmd.Flags().IntVar(&n, "n", 20, "number of recent calls to show")
+	return cmd
 }
 
 func cmdAnomalies() *cobra.Command {
@@ -423,31 +578,131 @@ func cmdAnalyze() *cobra.Command {
 }
 
 func cmdExplain() *cobra.Command {
-	return &cobra.Command{
+	var dbPath string
+	cmd := &cobra.Command{
 		Use:   "explain <anomaly-id>",
-		Short: "Deep-dive a single anomaly",
+		Short: "Deep-dive a single anomaly with the AI agent",
 		Args:  cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
-			return notImplemented("explain")
+			id, err := strconv.ParseInt(args[0], 10, 64)
+			if err != nil {
+				return fmt.Errorf("anomaly-id must be an integer")
+			}
+			ctx := context.Background()
+			db, err := storage.Open(dbPath)
+			if err != nil {
+				return err
+			}
+			defer db.Close()
+			a, err := db.GetAnomaly(ctx, id)
+			if err != nil {
+				return err
+			}
+			fmt.Printf("anomaly #%d  key:%s  date:%s  actual:$%.2f  baseline:$%.2f  delta:+$%.2f  %.1fσ\n\n",
+				a.ID, a.APIKeyID, a.Date, a.ActualValue, a.BaselineValue, a.Delta, a.Sigma)
+
+			apiKey := os.Getenv("GEMINI_API_KEY")
+			if apiKey == "" {
+				return fmt.Errorf("set GEMINI_API_KEY to enable agent investigation")
+			}
+			inv, err := agent.New(db, apiKey, os.Getenv("GEMINI_MODEL"))
+			if err != nil {
+				return fmt.Errorf("init agent: %w", err)
+			}
+			emit := func(msg string) { fmt.Println(msg) }
+			if _, err := inv.Investigate(ctx, a, emit); err != nil {
+				return err
+			}
+			return nil
 		},
 	}
+	cmd.Flags().StringVar(&dbPath, "db", "llmtrace.db", "path to SQLite ledger")
+	return cmd
 }
 
 func cmdReport() *cobra.Command {
 	var days int
 	var format string
+	var dbPath string
 	cmd := &cobra.Command{
 		Use:   "report",
-		Short: "Polished report",
+		Short: "Spend and anomaly report",
 		RunE: func(cmd *cobra.Command, args []string) error {
-			return notImplemented("report")
+			ctx := context.Background()
+			db, err := storage.Open(dbPath)
+			if err != nil {
+				return err
+			}
+			defer db.Close()
+			since := time.Now().UTC().AddDate(0, 0, -days)
+			summary, err := db.CallSummary(ctx, since)
+			if err != nil {
+				return err
+			}
+			anomalies, _ := db.ListAnomalies(ctx, since)
+
+			var totalCalls int64
+			var totalCost float64
+			for _, r := range summary {
+				totalCalls += r.Calls
+				totalCost += r.CostUSD
+			}
+
+			md := format == "markdown"
+			if md {
+				fmt.Printf("## LLMTrace Report — last %d days\n\n", days)
+				fmt.Printf("**Period:** %s to %s\n\n", since.Format("2006-01-02"), time.Now().UTC().Format("2006-01-02"))
+				fmt.Printf("**Total calls:** %d  |  **Total cost:** $%.4f\n\n", totalCalls, totalCost)
+				if len(summary) > 0 {
+					fmt.Print("### Cost by key/model\n\n")
+					fmt.Println("| Key | Model | Calls | Cost USD |")
+					fmt.Println("|---|---|---|---|")
+					for _, r := range summary {
+						fmt.Printf("| %s | %s | %d | $%.4f |\n", r.APIKeyID, r.Model, r.Calls, r.CostUSD)
+					}
+					fmt.Println()
+				}
+				if len(anomalies) > 0 {
+					fmt.Print("### Anomalies\n\n")
+					for _, a := range anomalies {
+						fmt.Printf("- **%s** on %s: $%.2f actual vs $%.2f baseline (+$%.2f, %.1fσ)\n",
+							a.APIKeyID, a.Date, a.ActualValue, a.BaselineValue, a.Delta, a.Sigma)
+					}
+					fmt.Println()
+				} else {
+					fmt.Print("### Anomalies\n\nNo anomalies detected.\n\n")
+				}
+				fmt.Printf("*Generated by [llmtrace](https://github.com/Yatsuiii/llmtrace)*\n")
+			} else {
+				fmt.Printf("llmtrace report — last %d days\n", days)
+				fmt.Printf("period:      %s to %s\n", since.Format("2006-01-02"), time.Now().UTC().Format("2006-01-02"))
+				fmt.Printf("total calls: %d\n", totalCalls)
+				fmt.Printf("total cost:  $%.4f\n\n", totalCost)
+				if len(summary) > 0 {
+					fmt.Println("cost by key/model:")
+					tw := tabwriter.NewWriter(os.Stdout, 0, 0, 2, ' ', 0)
+					fmt.Fprintln(tw, "  KEY\tMODEL\tCALLS\tCOST")
+					for _, r := range summary {
+						fmt.Fprintf(tw, "  %s\t%s\t%d\t$%.4f\n", r.APIKeyID, r.Model, r.Calls, r.CostUSD)
+					}
+					tw.Flush()
+					fmt.Println()
+				}
+				if len(anomalies) > 0 {
+					fmt.Printf("anomalies (%d):\n", len(anomalies))
+					for _, a := range anomalies {
+						fmt.Printf("  %s on %s: +$%.2f (%.1fσ)\n", a.APIKeyID, a.Date, a.Delta, a.Sigma)
+					}
+				} else {
+					fmt.Println("anomalies: none")
+				}
+			}
+			return nil
 		},
 	}
 	cmd.Flags().IntVar(&days, "days", 30, "window to report on")
 	cmd.Flags().StringVar(&format, "format", "text", "output format: text | markdown")
+	cmd.Flags().StringVar(&dbPath, "db", "llmtrace.db", "path to SQLite ledger")
 	return cmd
 }
 
-func notImplemented(name string) error {
-	return fmt.Errorf("%s: not implemented yet", name)
-}

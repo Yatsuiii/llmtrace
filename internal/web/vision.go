@@ -19,8 +19,8 @@ func visionHandler(db *storage.DB) http.HandlerFunc {
 			return
 		}
 		apiKey := os.Getenv("GEMINI_API_KEY")
-		if apiKey == "" {
-			http.Error(w, "GEMINI_API_KEY not set", http.StatusServiceUnavailable)
+		if apiKey == "" && os.Getenv("GOOGLE_CLOUD_PROJECT") == "" {
+			http.Error(w, "neither GEMINI_API_KEY nor GOOGLE_CLOUD_PROJECT set", http.StatusServiceUnavailable)
 			return
 		}
 		if err := r.ParseMultipartForm(12 << 20); err != nil {

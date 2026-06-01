@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"os"
 	"regexp"
 	"strconv"
 	"strings"
@@ -35,7 +36,17 @@ type Investigator struct {
 
 func New(db *storage.DB, apiKey, model string) (*Investigator, error) {
 	ctx := context.Background()
-	gc, err := genai.NewClient(ctx, &genai.ClientConfig{APIKey: apiKey})
+	var cfg *genai.ClientConfig
+	if proj := os.Getenv("GOOGLE_CLOUD_PROJECT"); proj != "" {
+		loc := os.Getenv("GOOGLE_CLOUD_LOCATION")
+		if loc == "" {
+			loc = "us-central1"
+		}
+		cfg = &genai.ClientConfig{Backend: genai.BackendVertexAI, Project: proj, Location: loc}
+	} else {
+		cfg = &genai.ClientConfig{APIKey: apiKey}
+	}
+	gc, err := genai.NewClient(ctx, cfg)
 	if err != nil {
 		return nil, fmt.Errorf("create genai client: %w", err)
 	}

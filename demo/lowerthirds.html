@@ -12,7 +12,7 @@
   .frame { width: 1920px; height: 1080px; position: relative; }
 
   .lt {
-    position: absolute; left: 76px; bottom: 84px; width: 940px;
+    position: absolute; left: 76px; bottom: 84px; width: 960px;
     background: rgba(10,11,17,0.94);
     border: 1px solid rgba(255,255,255,0.10);
     border-left: 4px solid #9a86ff;
@@ -44,27 +44,37 @@
 </head>
 <body>
 
-<!-- lower-0 — segment: dashboard tour -->
+<!-- lower-0 — terminal cold open -->
 <div class="frame">
   <div class="lt">
     <div class="brand">llm<span>trace</span></div>
-    <div class="label">What it is</div>
-    <div class="cap">A self-hosted proxy that records cost, latency, and a prompt
-      fingerprint for <b>every LLM call</b>.</div>
+    <div class="label">The tool</div>
+    <div class="cap">A self-hosted proxy for LLM APIs. One Go binary, <b>one command to
+      run</b>.</div>
   </div>
 </div>
 
-<!-- lower-1 — segment: anomaly detected -->
+<!-- lower-1 — dashboard -->
+<div class="frame">
+  <div class="lt">
+    <div class="brand">llm<span>trace</span></div>
+    <div class="label">The dashboard</div>
+    <div class="cap">Every call recorded: cost, latency, and a <b>prompt fingerprint</b>,
+      in a local ledger.</div>
+  </div>
+</div>
+
+<!-- lower-2 — detect -->
 <div class="frame">
   <div class="lt">
     <div class="brand">llm<span>trace</span></div>
     <div class="label">Step 01 &nbsp;·&nbsp; Detect</div>
-    <div class="cap">A spend anomaly is flagged. The <b>prod-frontend</b> key is running
-      over 4x its baseline.</div>
+    <div class="cap">A spend anomaly is flagged. The prod-frontend key is running
+      <b>over 3x its baseline</b>.</div>
   </div>
 </div>
 
-<!-- lower-2 — segment: investigate -->
+<!-- lower-3 — investigate -->
 <div class="frame">
   <div class="lt">
     <div class="brand">llm<span>trace</span></div>
@@ -74,23 +84,33 @@
   </div>
 </div>
 
-<!-- lower-3 — segment: vision import -->
+<!-- lower-4 — vision import -->
 <div class="frame">
   <div class="lt">
     <div class="brand">llm<span>trace</span></div>
     <div class="label">Step 03 &nbsp;·&nbsp; Vision Import</div>
     <div class="cap">Drop in a screenshot of <b>any billing dashboard</b>. Gemini reads the
-      spend, the agent traces the cause.</div>
+      spend off the image.</div>
   </div>
 </div>
 
-<!-- lower-4 — segment: github proof -->
+<!-- lower-5 — ask the agent -->
 <div class="frame">
   <div class="lt">
     <div class="brand">llm<span>trace</span></div>
-    <div class="label">Step 04 &nbsp;·&nbsp; It acts</div>
-    <div class="cap">A background watcher opens a <b>real fix pull request</b> on GitHub.
-      No human in the loop.</div>
+    <div class="label">Step 04 &nbsp;·&nbsp; Ask the agent</div>
+    <div class="cap">Ask why spend spiked in <b>plain English</b>. The agent answers
+      straight from the ledger.</div>
+  </div>
+</div>
+
+<!-- lower-6 — ship the fix -->
+<div class="frame">
+  <div class="lt">
+    <div class="brand">llm<span>trace</span></div>
+    <div class="label">Step 05 &nbsp;·&nbsp; Ship the fix</div>
+    <div class="cap">The agent opens a <b>real fix pull request</b> on GitHub, ready to
+      review and merge.</div>
   </div>
 </div>
 

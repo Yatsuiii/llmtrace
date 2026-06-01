@@ -40,8 +40,8 @@ func investigateHandler(db *storage.DB) http.HandlerFunc {
 		}
 
 		apiKey := os.Getenv("GEMINI_API_KEY")
-		if apiKey == "" {
-			http.Error(w, "GEMINI_API_KEY not set", http.StatusServiceUnavailable)
+		if apiKey == "" && os.Getenv("GOOGLE_CLOUD_PROJECT") == "" {
+			http.Error(w, "neither GEMINI_API_KEY nor GOOGLE_CLOUD_PROJECT set", http.StatusServiceUnavailable)
 			return
 		}
 		model := os.Getenv("GEMINI_MODEL")

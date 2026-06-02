@@ -28,7 +28,7 @@ Existing observability tools (Helicone, Portkey, Langfuse, LiteLLM) show you the
 Cost spikes are the loudest signal. They're not the only one. Same join, different question: which deploy added 800ms to your p95? Which deploy changed what your summarizer actually says?
 
 > Live demo: **https://llmtrace-681081536857.asia-south1.run.app**
-> Deployed on Google Cloud Run. Autonomous agent runs on Gemini 2.0 Flash.
+> Deployed on Google Cloud Run. Autonomous agent runs on Gemini 2.5 Flash.
 
 ---
 
@@ -114,7 +114,7 @@ The wedge in one sentence: *deploy-causal observability for AI agents, with zero
 ```bash
 git clone https://github.com/Yatsuiii/llmtrace.git
 cd llmtrace
-cp .env.example .env          # add your GEMINI_API_KEY
+cp .env.example .env          # add your free GEMINI_API_KEY
 docker compose up -d
 ```
 
@@ -122,7 +122,14 @@ Open `http://localhost:8080`. The dashboard loads with a demo scenario auto-seed
 
 Deployed on Google Cloud Run via `gcloud run deploy --source .`. The live demo above runs exactly this image.
 
-Requirements: Docker and a `GEMINI_API_KEY` (free tier available at Google AI Studio).
+### Keys: bring your own
+
+llmtrace is self-hosted and stores nothing off your machine, so you supply the keys it uses:
+
+- **`GEMINI_API_KEY`** powers the investigation agent (the causal attribution, chat, and vision panels). Grab one free at [Google AI Studio](https://aistudio.google.com/apikey). The free tier is plenty, so the agent costs you nothing to run.
+- **`ANTHROPIC_API_KEY`** is only needed if you route live traffic through the proxy. It is your own upstream key, forwarded untouched.
+
+Everything deterministic (the proxy, ledger, anomaly detection, and deploy correlation) works with no AI key at all. The Gemini key only unlocks the agent narrative on top.
 
 ### Local Go build
 

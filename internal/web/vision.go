@@ -76,7 +76,7 @@ func visionHandler(db *storage.DB) http.HandlerFunc {
 			emit(fmt.Sprintf("  %s   $%.2f", d.Date, d.CostUSD))
 		}
 		emit("")
-		emit(fmt.Sprintf("  anomaly: %s — $%.2f vs $%.2f baseline",
+		emit(fmt.Sprintf("  anomaly: %s · $%.2f vs $%.2f baseline",
 			report.AnomalyDate, report.AnomalyCost, report.BaselineCost))
 		if report.Summary != "" {
 			emit("  " + report.Summary)

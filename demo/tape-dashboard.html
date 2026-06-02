@@ -1,0 +1,309 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>llmtrace · the tape</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --bg: #07080a;
+    --panel: #0b0d10;
+    --inset: #08090b;
+    --line: rgba(255,255,255,0.07);
+    --line-lit: rgba(255,255,255,0.13);
+    --text: #d4d8df;
+    --muted: #767d8b;
+    --dim: #474d59;
+    --amber: #ffb000;
+    --amber-hi: #ffce5c;
+    --green: #2ee66b;
+    --green-dim: #1d9a4a;
+    --red: #ff4d4d;
+    --red-dim: #b93232;
+    --mono: 'JetBrains Mono', 'Cascadia Code', ui-monospace, monospace;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body {
+    background: var(--bg); color: var(--text); font-family: var(--mono);
+    font-size: 13px; line-height: 1.5; -webkit-font-smoothing: antialiased;
+    padding-bottom: 34px; font-variant-numeric: tabular-nums;
+  }
+  ::selection { background: rgba(255,176,0,0.28); color: #fff; }
+  .num { font-variant-numeric: tabular-nums; }
+
+  /* ── top ticker ─────────────────────────────────────────── */
+  .ticker {
+    display: flex; align-items: center; gap: 0; height: 38px;
+    border-bottom: 1px solid var(--line); background: #090a0d;
+    padding: 0 16px; font-size: 12.5px; overflow: hidden; white-space: nowrap;
+    position: sticky; top: 0; z-index: 5;
+  }
+  .ticker .brand { font-weight: 800; letter-spacing: -0.02em; color: #fff; }
+  .ticker .brand b { color: var(--amber); }
+  .ticker .cursor { color: var(--amber); animation: blink 1.1s steps(1) infinite;
+    margin: 0 14px 0 4px; font-weight: 700; }
+  @keyframes blink { 0%,50% { opacity:1; } 51%,100% { opacity:0; } }
+  .ticker .seg { display: inline-flex; align-items: center; gap: 7px; padding: 0 16px;
+    border-left: 1px solid var(--line); height: 100%; }
+  .ticker .k { color: var(--dim); font-size: 11px; font-weight: 600; letter-spacing: 0.04em; }
+  .ticker .v { color: var(--text); font-weight: 700; }
+  .ticker .v.amber { color: var(--amber-hi); }
+  .ticker .v.red { color: var(--red); }
+  .ticker .v.green { color: var(--green); }
+  .ticker .up { color: var(--red); }
+  .ticker .dot { width: 7px; height: 7px; border-radius: 50%; background: var(--green);
+    box-shadow: 0 0 7px var(--green); animation: pulse 1.8s ease-in-out infinite; }
+  @keyframes pulse { 0%,100% { opacity:1; } 50% { opacity:0.3; } }
+  .ticker .spacer { margin-left: auto; }
+
+  .wrap { max-width: 1180px; margin: 0 auto; padding: 22px 16px 40px; }
+
+  .panel { background: var(--panel); border: 1px solid var(--line); border-radius: 4px;
+    margin-bottom: 14px; }
+  .phd { display: flex; align-items: center; gap: 10px; padding: 11px 16px;
+    border-bottom: 1px solid var(--line); }
+  .phd .lbl { font-size: 11px; font-weight: 700; letter-spacing: 0.14em;
+    text-transform: uppercase; color: var(--muted); }
+  .phd .lbl b { color: var(--amber); }
+  .phd .meta { margin-left: auto; font-size: 11px; color: var(--dim); }
+  .phd .meta .q { color: var(--muted); }
+
+  /* ── equity chart ───────────────────────────────────────── */
+  .chart { padding: 14px 16px 8px; }
+  .chart svg { width: 100%; height: auto; display: block; }
+  .grid { stroke: rgba(255,255,255,0.05); stroke-width: 1; }
+  .axis { fill: var(--dim); font: 600 11px var(--mono); }
+  .costline { fill: none; stroke: var(--amber); stroke-width: 2;
+    stroke-linejoin: round; stroke-linecap: round;
+    stroke-dasharray: 1000; stroke-dashoffset: 0;
+    animation: draw 1.3s ease-out 0.15s; }
+  @keyframes draw { from { stroke-dashoffset: 1000; } to { stroke-dashoffset: 0; } }
+  .costarea { fill: url(#ag); opacity: 1; animation: fade 0.8s ease 0.6s backwards; }
+  @keyframes fade { from { opacity: 0; } to { opacity: 1; } }
+  .dline { stroke: var(--red); stroke-width: 1.3; stroke-dasharray: 4 4; opacity: 0.8; }
+  .dlabel { opacity: 1; animation: fade 0.5s ease 1.1s backwards; }
+  .dlabel rect { fill: rgba(255,77,77,0.1); stroke: rgba(255,77,77,0.4); stroke-width: 1; }
+  .dlabel text { fill: #ff9b9b; font: 600 11px var(--mono); }
+  .apex { fill: var(--red); opacity: 1; animation: fade 0.4s ease 1.3s backwards; }
+  .apexlabel { fill: var(--red); font: 700 11px var(--mono); opacity: 1;
+    animation: fade 0.5s ease 1.35s backwards; }
+
+  /* ── watchlist ──────────────────────────────────────────── */
+  table.watch { width: 100%; border-collapse: collapse; }
+  .watch th { text-align: left; font-size: 10.5px; font-weight: 700; letter-spacing: 0.08em;
+    text-transform: uppercase; color: var(--dim); padding: 9px 16px; border-bottom: 1px solid var(--line); }
+  .watch th.r, .watch td.r { text-align: right; }
+  .watch td { padding: 11px 16px; border-bottom: 1px solid var(--line); }
+  .watch tr:last-child td { border-bottom: none; }
+  .watch tr.hot td { background: rgba(255,77,77,0.045); }
+  .watch tr:hover td { background: rgba(255,255,255,0.02); }
+  .watch .key { font-weight: 700; color: var(--text); }
+  .watch tr.hot .key { color: #ffb3b3; }
+  .watch .perday { font-weight: 700; }
+  .watch tr.hot .perday { color: var(--red); }
+  .delta.up { color: var(--red); font-weight: 700; }
+  .delta.flat { color: var(--green-dim); }
+  .sig { color: var(--muted); font-weight: 600; }
+  .sig.hot { color: var(--red); font-weight: 700; }
+  .st { display: inline-flex; align-items: center; gap: 6px; font-size: 11px;
+    font-weight: 700; letter-spacing: 0.04em; }
+  .st .d { width: 6px; height: 6px; border-radius: 50%; }
+  .st.crit { color: var(--red); } .st.crit .d { background: var(--red); box-shadow: 0 0 6px var(--red); }
+  .st.ok { color: var(--green-dim); } .st.ok .d { background: var(--green-dim); }
+  .mix { display: inline-flex; width: 84px; height: 6px; border-radius: 1px; overflow: hidden;
+    border: 1px solid var(--line); vertical-align: middle; }
+  .mix i { display: block; height: 100%; }
+  .mix .s { background: var(--amber); } .mix .h { background: var(--dim); }
+  .mixc { font-size: 10.5px; color: var(--dim); margin-left: 8px; }
+  .spark { display: block; }
+
+  /* ── incident ───────────────────────────────────────────── */
+  .incident { border-color: rgba(255,77,77,0.22); }
+  .incident .phd { border-color: rgba(255,77,77,0.18); }
+  .ibody { padding: 14px 16px; font-size: 12.5px; line-height: 1.85; }
+  .ibody .row { display: flex; gap: 12px; }
+  .ibody .ev { color: var(--muted); }
+  .ibody .tag { color: var(--amber); font-weight: 700; }
+  .ibody .tag.v { color: #79b8ff; }
+  .ibody .lead { color: var(--text); margin-bottom: 8px; }
+  .ibody .lead b { color: #fff; }
+  .conf { color: var(--green); font-weight: 700; }
+  .ibody .rec { color: var(--dim); margin-top: 8px; padding-top: 8px;
+    border-top: 1px solid var(--line); }
+  .ibody .rec b { color: var(--muted); }
+
+  /* ── projection strip ───────────────────────────────────── */
+  .proj { display: flex; align-items: baseline; gap: 20px; flex-wrap: wrap;
+    padding: 14px 16px; border-color: rgba(255,176,0,0.26); }
+  .proj .plbl { font-size: 11px; font-weight: 700; letter-spacing: 0.1em;
+    text-transform: uppercase; color: #c79a3f; }
+  .proj .big { font-size: 26px; font-weight: 800; color: var(--amber); letter-spacing: -0.02em; }
+  .proj .sub { font-size: 12px; color: #b89a63; }
+  .proj .sub b { color: var(--red); }
+
+  /* ── bottom status bar ──────────────────────────────────── */
+  .statusbar { position: fixed; bottom: 0; left: 0; right: 0; height: 28px;
+    display: flex; align-items: center; gap: 0; background: #090a0d;
+    border-top: 1px solid var(--line); font-size: 11px; color: var(--dim);
+    padding: 0 14px; z-index: 5; white-space: nowrap; overflow: hidden; }
+  .statusbar .s { padding: 0 12px; border-right: 1px solid var(--line); height: 100%;
+    display: inline-flex; align-items: center; gap: 6px; }
+  .statusbar .s:first-child { padding-left: 0; }
+  .statusbar .ready { color: var(--green); font-weight: 700; }
+  .statusbar .s b { color: var(--muted); font-weight: 600; }
+  .statusbar .right { margin-left: auto; border: none; color: var(--dim); }
+</style>
+</head>
+<body>
+
+<div class="ticker">
+  <span class="brand">llm<b>trace</b></span><span class="cursor">▌</span>
+  <span class="seg"><span class="k">30D SPEND</span><span class="v amber">$307.68</span><span class="up">▲4.2×</span></span>
+  <span class="seg"><span class="k">ANOM</span><span class="v red">2</span></span>
+  <span class="seg"><span class="k">ACTIONS</span><span class="v">5</span></span>
+  <span class="seg"><span class="dot"></span><span class="v green">AGENT ACTIVE</span><span class="k">scan&nbsp;13</span></span>
+  <span class="seg spacer"><span class="k">NEXT</span><span class="v">09:37:10 UTC</span></span>
+</div>
+
+<div class="wrap">
+
+  <!-- equity chart -->
+  <div class="panel">
+    <div class="phd">
+      <span class="lbl">COST / <b>PROD-FRONTEND</b> · 30D</span>
+      <span class="meta"><span class="q">which deploy spiked the bill?</span></span>
+    </div>
+    <div class="chart">
+      <svg viewBox="0 0 1000 280" preserveAspectRatio="none" aria-label="cost chart">
+        <defs>
+          <linearGradient id="ag" x1="0" y1="0" x2="0" y2="1">
+            <stop offset="0" stop-color="#ffb000" stop-opacity="0.22"/>
+            <stop offset="1" stop-color="#ffb000" stop-opacity="0"/>
+          </linearGradient>
+        </defs>
+        <!-- grid -->
+        <line class="grid" x1="60" y1="56"  x2="980" y2="56"/>
+        <line class="grid" x1="60" y1="105" x2="980" y2="105"/>
+        <line class="grid" x1="60" y1="153" x2="980" y2="153"/>
+        <line class="grid" x1="60" y1="202" x2="980" y2="202"/>
+        <line class="grid" x1="60" y1="250" x2="980" y2="250"/>
+        <text class="axis" x="52" y="60"  text-anchor="end">$24</text>
+        <text class="axis" x="52" y="109" text-anchor="end">$18</text>
+        <text class="axis" x="52" y="157" text-anchor="end">$12</text>
+        <text class="axis" x="52" y="206" text-anchor="end">$6</text>
+        <text class="axis" x="52" y="254" text-anchor="end">$0</text>
+
+        <!-- area + line -->
+        <path class="costarea" d="M60,250 L60,205 90,202 121,207 151,203 182,206 212,201 242,208 273,204 303,206 333,202 364,207 394,203 424,205 455,208 485,202 515,206 546,204 576,207 606,203 637,205 667,206 697,204 727,201 758,152 788,112 818,92 849,78 879,70 909,65 940,62 970,60 L970,250 Z"/>
+        <polyline class="costline" pathLength="1000"
+          points="60,205 90,202 121,207 151,203 182,206 212,201 242,208 273,204 303,206 333,202 364,207 394,203 424,205 455,208 485,202 515,206 546,204 576,207 606,203 637,205 667,206 697,204 727,201 758,152 788,112 818,92 849,78 879,70 909,65 940,62 970,60"/>
+
+        <!-- deploy marker -->
+        <line class="dline" x1="727" y1="20" x2="727" y2="250"/>
+        <g class="dlabel">
+          <rect x="455" y="14" width="268" height="22" rx="2"/>
+          <text x="467" y="29">▸ PR #129  summary → sonnet  14:05 UTC</text>
+        </g>
+
+        <!-- apex -->
+        <circle class="apex" cx="970" cy="60" r="3.5"/>
+        <text class="apexlabel" x="962" y="52" text-anchor="end">$23.60/d · 28σ</text>
+      </svg>
+    </div>
+  </div>
+
+  <!-- watchlist -->
+  <div class="panel">
+    <div class="phd"><span class="lbl">TRACKED KEYS</span><span class="meta">3 keys · anthropic</span></div>
+    <table class="watch">
+      <thead><tr>
+        <th>KEY</th><th>30D</th><th class="r">$/DAY</th><th class="r">Δ</th>
+        <th>MODEL MIX</th><th class="r">σ</th><th class="r">STATUS</th>
+      </tr></thead>
+      <tbody>
+        <tr class="hot">
+          <td class="key">prod-frontend</td>
+          <td><svg class="spark" width="90" height="26" viewBox="0 0 90 26">
+            <polyline fill="none" stroke="#ff4d4d" stroke-width="1.5"
+              points="2,18 12,17 22,18 32,17 42,18 52,16 60,17 68,11 78,5 88,3"/></svg></td>
+          <td class="r perday">$23.60</td>
+          <td class="r delta up">▲ 4.2×</td>
+          <td><span class="mix"><i class="s" style="flex:89"></i><i class="h" style="flex:11"></i></span><span class="mixc">89% sonnet</span></td>
+          <td class="r sig hot">28.0</td>
+          <td class="r"><span class="st crit"><span class="d"></span>CRITICAL</span></td>
+        </tr>
+        <tr>
+          <td class="key">internal-tools</td>
+          <td><svg class="spark" width="90" height="26" viewBox="0 0 90 26">
+            <polyline fill="none" stroke="#1d9a4a" stroke-width="1.5"
+              points="2,15 12,16 22,14 32,15 42,15 52,16 62,14 72,15 82,15 88,14"/></svg></td>
+          <td class="r perday">$1.72</td>
+          <td class="r delta flat">━ flat</td>
+          <td><span class="mix"><i class="s" style="flex:100"></i></span><span class="mixc">sonnet</span></td>
+          <td class="r sig">0.4</td>
+          <td class="r"><span class="st ok"><span class="d"></span>OK</span></td>
+        </tr>
+        <tr>
+          <td class="key">background-jobs</td>
+          <td><svg class="spark" width="90" height="26" viewBox="0 0 90 26">
+            <polyline fill="none" stroke="#1d9a4a" stroke-width="1.5"
+              points="2,14 12,15 22,15 32,13 42,15 52,14 62,15 72,14 82,16 88,15"/></svg></td>
+          <td class="r perday">$2.06</td>
+          <td class="r delta flat">━ flat</td>
+          <td><span class="mix"><i class="s" style="flex:100"></i></span><span class="mixc">sonnet</span></td>
+          <td class="r sig">0.6</td>
+          <td class="r"><span class="st ok"><span class="d"></span>OK</span></td>
+        </tr>
+      </tbody>
+    </table>
+  </div>
+
+  <!-- incident -->
+  <div class="panel incident">
+    <div class="phd"><span class="lbl">CAUSE IDENTIFIED</span>
+      <span class="meta">confidence <span class="conf">0.95</span></span></div>
+    <div class="ibody">
+      <div class="lead">spend anomaly on <b>prod-frontend</b> caused by deploy
+        <b>gha-129-summary-sonnet</b> (PR #129) "switch summary endpoint to claude-sonnet",
+        completed 14:05 UTC.</div>
+      <div class="row"><span class="tag">[model_change]</span><span class="ev">prompt 19e978e3 shifted 91% haiku → 89% sonnet (a more expensive model)</span></div>
+      <div class="row"><span class="tag">[volume]</span><span class="ev">+58% call volume, new prompt retries on malformed JSON</span></div>
+      <div class="row"><span class="tag">[cost/call]</span><span class="ev">5.4× pre-deploy median</span></div>
+      <div class="row"><span class="tag v">[agent]</span><span class="ev">opened issue #41 · rate-limited key to 20 rpm</span></div>
+      <div class="rec"><b>recommendation:</b> gate model changes behind a cost check; A/B before full rollout.</div>
+    </div>
+  </div>
+
+  <!-- projection -->
+  <div class="panel proj">
+    <span class="plbl">Projected · prod-frontend</span>
+    <span class="big">$603/mo</span>
+    <span class="sub">baseline run-rate $127/mo · this regression adds <b>+$476/mo</b> if left unfixed</span>
+  </div>
+
+</div>
+
+<div class="statusbar">
+  <span class="s ready">● READY</span>
+  <span class="s">scan <b>#13</b></span>
+  <span class="s">last <b id="last">09:21:46 UTC</b></span>
+  <span class="s">next <b>09:37:10 UTC</b></span>
+  <span class="s">model <b>gemini-2.5-flash</b></span>
+  <span class="s">proxy <b>:8080</b></span>
+  <span class="s right">MIT · llmtrace v0.2</span>
+</div>
+
+<script>
+  // tiny live clock on the status bar so it feels real
+  setInterval(function () {
+    var d = new Date();
+    var p = function (n) { return String(n).padStart(2, '0'); };
+    document.getElementById('last').textContent =
+      p(d.getUTCHours()) + ':' + p(d.getUTCMinutes()) + ':' + p(d.getUTCSeconds()) + ' UTC';
+  }, 1000);
+</script>
+</body>
+</html>

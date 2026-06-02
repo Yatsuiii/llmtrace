@@ -262,7 +262,7 @@ func (w *Watcher) actRateLimit(ctx context.Context, a storage.AnomalyRow) {
 }
 
 func (w *Watcher) recordAction(ctx context.Context, anomalyID int64, actionType, status, payload, result, attribution string) {
-	_ = w.db.InsertAgentAction(ctx, storage.AgentActionRow{
+	if err := w.db.InsertAgentAction(ctx, storage.AgentActionRow{
 		AnomalyID:   anomalyID,
 		ActionType:  actionType,
 		Status:      status,
@@ -270,7 +270,9 @@ func (w *Watcher) recordAction(ctx context.Context, anomalyID int64, actionType,
 		Result:      result,
 		Attribution: attribution,
 		CreatedAt:   time.Now().UTC(),
-	})
+	}); err != nil {
+		w.emit(fmt.Sprintf("[watcher] record action failed: %v", err))
+	}
 }
 
 func severityOf(sigma float64) string {

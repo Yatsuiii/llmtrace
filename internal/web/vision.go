@@ -52,7 +52,11 @@ func visionHandler(db *storage.DB) http.HandlerFunc {
 		w.Header().Set("Content-Type", "text/event-stream")
 		w.Header().Set("Cache-Control", "no-cache")
 		w.Header().Set("X-Accel-Buffering", "no")
-		flusher := w.(http.Flusher)
+		flusher, ok := w.(http.Flusher)
+		if !ok {
+			http.Error(w, "streaming not supported", http.StatusInternalServerError)
+			return
+		}
 		emit := func(msg string) {
 			fmt.Fprintf(w, "data: %s\n\n", msg)
 			flusher.Flush()

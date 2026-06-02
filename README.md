@@ -137,12 +137,21 @@ GEMINI_API_KEY=xxx go run ./cmd/llmtrace serve
 ## CLI
 
 ```
-llmtrace seed                        seed demo scenario into ledger
+llmtrace init                        write a starter config.toml
 llmtrace serve [--port 8080]         run dashboard + agent server
-llmtrace sync-deploys [--days 30]    ingest deploy events from GitHub Actions
+llmtrace watch                       run autonomous watcher loop (no web server)
+llmtrace seed                        seed demo scenario into ledger
+llmtrace keys add --label <name>     mint a new inbound API key
+llmtrace keys list                   list all API keys
+llmtrace keys revoke <id>            deactivate a key
+llmtrace stats [--days 7]            show call summary by key and model
+llmtrace tail [--n 20]               show the most recent N calls
 llmtrace anomalies [--days 30]       detect and list spend anomalies
 llmtrace correlate [--days 30]       match anomalies to deploys (scored lineage)
 llmtrace analyze [--days 30]         detect anomalies + AI investigation
+llmtrace explain <anomaly-id>        deep-dive a single anomaly with the agent
+llmtrace report [--format markdown]  generate a cost + anomaly report
+llmtrace sync-deploys [--days 30]    ingest deploy events from GitHub Actions
 ```
 
 `correlate` runs the deterministic matcher: for each anomaly it finds deploys in

@@ -1,11 +1,10 @@
 // Package seed plants the demo scenario into the ledger so the agent
 // has something to investigate without a live proxy intercepting traffic.
 //
-// Scenario locked for the May 2026 hackathon demo:
+// Scenario: 30-day window ending today.
 //
-//	Window: 2026-04-11 → 2026-05-11 (30 days).
-//	Keys:   prod-frontend (affected), internal-tools (control), background-jobs (control).
-//	Deploys: three land on 2026-05-03 — PR #1 (dependency bump) and PR #3 (README)
+//	Keys:    prod-frontend (affected), internal-tools (control), background-jobs (control).
+//	Deploys: three land on day 22 — PR #1 (dependency bump) and PR #3 (README)
 //	         are innocent; PR #2 "switch summary endpoint to claude-sonnet" at
 //	         14:05 UTC is the real cause the agent must isolate.
 //	Pre-deploy:  /summary calls on prod-frontend run 90% Haiku / 10% Sonnet.
@@ -30,6 +29,7 @@ import (
 
 const (
 	scenarioDays        = 30
+	deployDayOffset     = 22 // deploy lands on day 22 of the 30-day window
 	demoSeed1    uint64 = 0x6c6c6d74 // "llmt"
 	demoSeed2    uint64 = 0x72616365 // "race"
 
@@ -40,10 +40,16 @@ const (
 	providerAnth     = "anthropic"
 )
 
-var (
-	scenarioStart = time.Date(2026, 4, 11, 0, 0, 0, 0, time.UTC)
-	deployAt      = time.Date(2026, 5, 3, 14, 5, 0, 0, time.UTC)
+// Start returns the beginning of the 30-day demo window (relative to today).
+func Start() time.Time {
+	return time.Now().UTC().Truncate(24 * time.Hour).AddDate(0, 0, -scenarioDays)
+}
 
+func deployAt() time.Time {
+	return Start().AddDate(0, 0, deployDayOffset).Add(14*time.Hour + 5*time.Minute)
+}
+
+var (
 	fpSummary = fp("summary-endpoint-v1")
 	fpChat    = fp("chat-endpoint-v1")
 	fpAgent   = fp("agent-tool-call-v1")
@@ -68,10 +74,11 @@ func Run(ctx context.Context, db *storage.DB) (int, error) {
 }
 
 func seedAPIKeys(ctx context.Context, db *storage.DB) error {
+	start := Start()
 	keys := []storage.APIKeyRow{
-		{ID: "prod-frontend", HashedKey: "demo", Label: "Production frontend", BudgetUSD: 500, Active: true, CreatedAt: scenarioStart},
-		{ID: "internal-tools", HashedKey: "demo", Label: "Internal tooling", BudgetUSD: 200, Active: true, CreatedAt: scenarioStart},
-		{ID: "background-jobs", HashedKey: "demo", Label: "Background jobs", BudgetUSD: 300, Active: true, CreatedAt: scenarioStart},
+		{ID: "prod-frontend", HashedKey: "demo", Label: "Production frontend", BudgetUSD: 500, Active: true, CreatedAt: start},
+		{ID: "internal-tools", HashedKey: "demo", Label: "Internal tooling", BudgetUSD: 200, Active: true, CreatedAt: start},
+		{ID: "background-jobs", HashedKey: "demo", Label: "Background jobs", BudgetUSD: 300, Active: true, CreatedAt: start},
 	}
 	for _, k := range keys {
 		if err := db.InsertAPIKey(ctx, k); err != nil {
@@ -82,7 +89,7 @@ func seedAPIKeys(ctx context.Context, db *storage.DB) error {
 }
 
 // demoRepo is the synthetic "customer app" repo the agent reads code from and
-// opens remediation PRs against. Override with LLMTRACE_DEMO_REPO if needed.
+// opens remediation PRs against. Override with GITHUB_REPO if needed.
 func demoRepo() string {
 	if r := os.Getenv("GITHUB_REPO"); r != "" {
 		return r
@@ -93,6 +100,7 @@ func demoRepo() string {
 // seedDeploys plants three deploys on the anomaly day. Only PR #2 is the real
 // cause — the agent must read all three diffs to rule out the innocent ones.
 func seedDeploys(ctx context.Context, db *storage.DB) error {
+	at := deployAt()
 	deploys := []storage.DeployRow{
 		{
 			ID:          "gha-1-deps-bump",
@@ -101,8 +109,8 @@ func seedDeploys(ctx context.Context, db *storage.DB) error {
 			CommitSHA:   "a1b2c3d4e5f6",
 			PRNumber:    1,
 			Title:       "bump anthropic SDK to 0.45",
-			StartedAt:   deployAt.Add(-35 * time.Minute),
-			CompletedAt: deployAt.Add(-30 * time.Minute),
+			StartedAt:   at.Add(-35 * time.Minute),
+			CompletedAt: at.Add(-30 * time.Minute),
 			Status:      "success",
 		},
 		{
@@ -112,8 +120,8 @@ func seedDeploys(ctx context.Context, db *storage.DB) error {
 			CommitSHA:   "c4e2117a8b1f",
 			PRNumber:    2,
 			Title:       "switch summary endpoint to claude-sonnet",
-			StartedAt:   deployAt,
-			CompletedAt: deployAt.Add(7 * time.Minute),
+			StartedAt:   at,
+			CompletedAt: at.Add(7 * time.Minute),
 			Status:      "success",
 		},
 		{
@@ -123,8 +131,8 @@ func seedDeploys(ctx context.Context, db *storage.DB) error {
 			CommitSHA:   "f6e5d4c3b2a1",
 			PRNumber:    3,
 			Title:       "tidy README wording",
-			StartedAt:   deployAt.Add(105 * time.Minute),
-			CompletedAt: deployAt.Add(108 * time.Minute),
+			StartedAt:   at.Add(105 * time.Minute),
+			CompletedAt: at.Add(108 * time.Minute),
 			Status:      "success",
 		},
 	}
@@ -138,10 +146,12 @@ func seedDeploys(ctx context.Context, db *storage.DB) error {
 
 func seedCalls(ctx context.Context, db *storage.DB) (int, error) {
 	rng := rand.New(rand.NewPCG(demoSeed1, demoSeed2))
+	start := Start()
+	at := deployAt()
 	var rows []storage.CallRow
 	for day := 0; day < scenarioDays; day++ {
-		dayStart := scenarioStart.Add(time.Duration(day) * 24 * time.Hour)
-		rows = append(rows, summaryCalls(rng, dayStart)...)
+		dayStart := start.Add(time.Duration(day) * 24 * time.Hour)
+		rows = append(rows, summaryCalls(rng, dayStart, at)...)
 		rows = append(rows, chatCalls(rng, dayStart)...)
 		rows = append(rows, agentCalls(rng, dayStart)...)
 	}
@@ -153,20 +163,18 @@ func seedCalls(ctx context.Context, db *storage.DB) (int, error) {
 
 // summaryCalls — the affected traffic. Pre-deploy ≈ 500 calls/day on Haiku.
 // Post-deploy ≈ 800 calls/day on Sonnet (60% volume bump from retry loop).
-func summaryCalls(rng *rand.Rand, dayStart time.Time) []storage.CallRow {
-	post := !dayStart.Before(deployAt.Truncate(24 * time.Hour))
+func summaryCalls(rng *rand.Rand, dayStart, at time.Time) []storage.CallRow {
+	post := !dayStart.Before(at.Truncate(24 * time.Hour))
 	base := 500
 	if post {
 		base = 800
 	}
-	count := base + rng.IntN(80) - 40 // ±40 jitter
+	count := base + rng.IntN(80) - 40
 	out := make([]storage.CallRow, 0, count)
 	for i := 0; i < count; i++ {
 		ts := dayStart.Add(time.Duration(rng.IntN(86400)) * time.Second)
-		// On the deploy day, only calls after deployAt take the new path.
-		isPostForCall := ts.After(deployAt)
+		isPostForCall := ts.After(at)
 		model := modelHaiku
-		// Even post-deploy, 10% of traffic lingers on the old model (canary residue).
 		if isPostForCall {
 			if rng.Float64() < 0.9 {
 				model = modelSonnet

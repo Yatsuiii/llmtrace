@@ -10,6 +10,7 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"io"
+	"log"
 	"net/http"
 	"os"
 	"strings"
@@ -62,7 +63,11 @@ func Handler(db *storage.DB) http.HandlerFunc {
 			return
 		}
 		defer resp.Body.Close()
-		respBody, _ := io.ReadAll(resp.Body)
+		respBody, err := io.ReadAll(resp.Body)
+		if err != nil {
+			http.Error(w, "read upstream response: "+err.Error(), http.StatusBadGateway)
+			return
+		}
 		latency := time.Since(start)
 
 		// Return the upstream response unchanged.
@@ -70,11 +75,11 @@ func Handler(db *storage.DB) http.HandlerFunc {
 		w.WriteHeader(resp.StatusCode)
 		w.Write(respBody)
 
-		recordCall(db, apiKeyID, reqBody, respBody, resp.StatusCode, latency)
+		recordCall(r.Context(), db, apiKeyID, reqBody, respBody, resp.StatusCode, latency)
 	}
 }
 
-func recordCall(db *storage.DB, apiKeyID string, reqBody, respBody []byte, status int, latency time.Duration) {
+func recordCall(ctx context.Context, db *storage.DB, apiKeyID string, reqBody, respBody []byte, status int, latency time.Duration) {
 	var parsed struct {
 		Model string `json:"model"`
 		Usage struct {
@@ -82,14 +87,18 @@ func recordCall(db *storage.DB, apiKeyID string, reqBody, respBody []byte, statu
 			OutputTokens int `json:"output_tokens"`
 		} `json:"usage"`
 	}
-	json.Unmarshal(respBody, &parsed)
+	if err := json.Unmarshal(respBody, &parsed); err != nil {
+		log.Printf("proxy: parse response body: %v", err)
+	}
 
 	model := parsed.Model
 	if model == "" {
 		var req struct {
 			Model string `json:"model"`
 		}
-		json.Unmarshal(reqBody, &req)
+		if err := json.Unmarshal(reqBody, &req); err != nil {
+			log.Printf("proxy: parse request body: %v", err)
+		}
 		model = req.Model
 	}
 	in, out := parsed.Usage.InputTokens, parsed.Usage.OutputTokens
@@ -106,7 +115,9 @@ func recordCall(db *storage.DB, apiKeyID string, reqBody, respBody []byte, statu
 		Status:       status,
 		PromptHash:   promptFingerprint(reqBody),
 	}
-	_ = db.InsertCalls(context.Background(), []storage.CallRow{row})
+	if err := db.InsertCalls(ctx, []storage.CallRow{row}); err != nil {
+		log.Printf("proxy: insert call record: %v", err)
+	}
 }
 
 // promptFingerprint derives a stable hash from the model, system prompt, and
@@ -120,7 +131,9 @@ func promptFingerprint(reqBody []byte) string {
 			Content any    `json:"content"`
 		} `json:"messages"`
 	}
-	json.Unmarshal(reqBody, &req)
+	if err := json.Unmarshal(reqBody, &req); err != nil {
+		log.Printf("proxy: parse request for fingerprint: %v", err)
+	}
 
 	var sb strings.Builder
 	sb.WriteString(req.Model)

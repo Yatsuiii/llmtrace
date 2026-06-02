@@ -5,6 +5,7 @@ import (
 	"crypto/rand"
 	"encoding/hex"
 	"fmt"
+	"log"
 	"os"
 	"strconv"
 	"text/tabwriter"
@@ -22,6 +23,12 @@ import (
 	"github.com/Yatsuiii/llmtrace/internal/watcher"
 	"github.com/Yatsuiii/llmtrace/internal/web"
 )
+
+func closeDB(db *storage.DB) {
+	if err := db.Close(); err != nil {
+		log.Printf("db close: %v", err)
+	}
+}
 
 func main() {
 	root := &cobra.Command{
@@ -59,19 +66,19 @@ func cmdSeed() *cobra.Command {
 			if err != nil {
 				return err
 			}
-			defer db.Close()
+			defer closeDB(db)
 			n, err := seed.Run(ctx, db)
 			if err != nil {
 				return err
 			}
 			fmt.Printf("seeded %d calls into %s\n", n, path)
-			since := time.Date(2026, 4, 11, 0, 0, 0, 0, time.UTC)
+			since := seed.Start()
 			daily, err := db.DailyCostByKey(ctx, since)
 			if err != nil {
 				return err
 			}
 			summary := map[string]struct{ pre, post float64 }{}
-			deployDay := "2026-05-03"
+			deployDay := since.AddDate(0, 0, 22).Format("2006-01-02")
 			for _, d := range daily {
 				s := summary[d.APIKeyID]
 				if d.Date < deployDay {
@@ -116,7 +123,7 @@ func cmdSyncDeploys() *cobra.Command {
 			if err != nil {
 				return err
 			}
-			defer db.Close()
+			defer closeDB(db)
 
 			gh := actions.GitHubFromEnv()
 			if !gh.Enabled() {
@@ -148,7 +155,7 @@ func cmdCorrelate() *cobra.Command {
 			if err != nil {
 				return err
 			}
-			defer db.Close()
+			defer closeDB(db)
 
 			since := time.Now().UTC().AddDate(0, 0, -days)
 			if _, err := detect.Run(ctx, db, detect.DefaultConfig(), since); err != nil {
@@ -227,7 +234,7 @@ func cmdServe() *cobra.Command {
 			if err != nil {
 				return err
 			}
-			defer db.Close()
+			defer closeDB(db)
 
 			var w *watcher.Watcher
 			if autonomous {
@@ -258,7 +265,7 @@ func cmdWatch() *cobra.Command {
 			if err != nil {
 				return err
 			}
-			defer db.Close()
+			defer closeDB(db)
 
 			w, err := buildWatcher(ctx, db)
 			if err != nil {
@@ -320,7 +327,7 @@ func cmdKeys() *cobra.Command {
 			if err != nil {
 				return err
 			}
-			defer db.Close()
+			defer closeDB(db)
 			raw := make([]byte, 24)
 			if _, err := rand.Read(raw); err != nil {
 				return err
@@ -351,7 +358,7 @@ func cmdKeys() *cobra.Command {
 			if err != nil {
 				return err
 			}
-			defer db.Close()
+			defer closeDB(db)
 			keys, err := db.ListAPIKeys(ctx)
 			if err != nil {
 				return err
@@ -392,7 +399,7 @@ func cmdKeys() *cobra.Command {
 			if err != nil {
 				return err
 			}
-			defer db.Close()
+			defer closeDB(db)
 			if err := db.SetAPIKeyActive(ctx, args[0], false); err != nil {
 				return err
 			}
@@ -417,7 +424,7 @@ func cmdStats() *cobra.Command {
 			if err != nil {
 				return err
 			}
-			defer db.Close()
+			defer closeDB(db)
 			since := time.Now().UTC().AddDate(0, 0, -days)
 			rows, err := db.CallSummary(ctx, since)
 			if err != nil {
@@ -458,7 +465,7 @@ func cmdTail() *cobra.Command {
 			if err != nil {
 				return err
 			}
-			defer db.Close()
+			defer closeDB(db)
 			calls, err := db.RecentCalls(ctx, n)
 			if err != nil {
 				return err
@@ -496,7 +503,7 @@ func cmdAnomalies() *cobra.Command {
 			if err != nil {
 				return err
 			}
-			defer db.Close()
+			defer closeDB(db)
 			since := time.Now().UTC().AddDate(0, 0, -days)
 			cfg := detect.DefaultConfig()
 			anomalies, err := detect.Run(ctx, db, cfg, since)
@@ -531,7 +538,7 @@ func cmdAnalyze() *cobra.Command {
 			if err != nil {
 				return err
 			}
-			defer db.Close()
+			defer closeDB(db)
 
 			since := time.Now().UTC().AddDate(0, 0, -days)
 			anomalies, err := detect.Run(ctx, db, detect.DefaultConfig(), since)
@@ -593,7 +600,7 @@ func cmdExplain() *cobra.Command {
 			if err != nil {
 				return err
 			}
-			defer db.Close()
+			defer closeDB(db)
 			a, err := db.GetAnomaly(ctx, id)
 			if err != nil {
 				return err
@@ -633,7 +640,7 @@ func cmdReport() *cobra.Command {
 			if err != nil {
 				return err
 			}
-			defer db.Close()
+			defer closeDB(db)
 			since := time.Now().UTC().AddDate(0, 0, -days)
 			summary, err := db.CallSummary(ctx, since)
 			if err != nil {

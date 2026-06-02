@@ -14,10 +14,13 @@ type ProxyConfig struct {
 	TLSKey  string
 }
 
+// ProvidersConfig holds upstream provider settings.
+// Only Anthropic is active today. OpenAI is planned for v0.3,
+// Bedrock after that — fields are reserved but not yet wired into the proxy.
 type ProvidersConfig struct {
 	Anthropic ProviderConfig
-	OpenAI    ProviderConfig
-	Bedrock   ProviderConfig
+	OpenAI    ProviderConfig // not yet implemented
+	Bedrock   ProviderConfig // not yet implemented
 }
 
 type ProviderConfig struct {

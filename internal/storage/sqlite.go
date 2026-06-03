@@ -616,3 +616,74 @@ type CallSummaryRow struct {
 	CostUSD      float64
 	AvgLatencyMs float64
 }
+
+// CostByModel is one model's slice of a CostResult.
+type CostByModel struct {
+	Model   string  `json:"model"`
+	Calls   int64   `json:"calls"`
+	CostUSD float64 `json:"cost_usd"`
+}
+
+// CostResult aggregates call telemetry for a session and/or time window.
+type CostResult struct {
+	Calls        int64
+	InputTokens  int64
+	OutputTokens int64
+	CostUSD      float64
+	FirstCall    time.Time
+	LastCall     time.Time
+	ByModel      []CostByModel
+}
+
+// CostFor aggregates call cost filtered by an optional session id and an
+// optional [from, to] window. An empty session or a zero time skips that
+// filter. This is the read side of integrations like re_gent: join an external
+// unit of work to its LLM cost by session id (exact) or timestamp (per-step).
+func (db *DB) CostFor(ctx context.Context, session string, from, to time.Time) (CostResult, error) {
+	where := "WHERE 1=1"
+	var args []any
+	if session != "" {
+		where += " AND session_id = ?"
+		args = append(args, session)
+	}
+	if !from.IsZero() {
+		where += " AND timestamp >= ?"
+		args = append(args, from.UnixMilli())
+	}
+	if !to.IsZero() {
+		where += " AND timestamp <= ?"
+		args = append(args, to.UnixMilli())
+	}
+
+	var res CostResult
+	var firstMs, lastMs int64
+	err := db.conn.QueryRowContext(ctx,
+		`SELECT COUNT(*), COALESCE(SUM(input_tokens),0), COALESCE(SUM(output_tokens),0),
+		        COALESCE(SUM(cost_usd),0), COALESCE(MIN(timestamp),0), COALESCE(MAX(timestamp),0)
+		 FROM calls `+where, args...,
+	).Scan(&res.Calls, &res.InputTokens, &res.OutputTokens, &res.CostUSD, &firstMs, &lastMs)
+	if err != nil {
+		return res, fmt.Errorf("cost aggregate: %w", err)
+	}
+	if firstMs > 0 {
+		res.FirstCall = time.UnixMilli(firstMs).UTC()
+		res.LastCall = time.UnixMilli(lastMs).UTC()
+	}
+
+	rows, err := db.conn.QueryContext(ctx,
+		`SELECT model, COUNT(*), COALESCE(SUM(cost_usd),0)
+		 FROM calls `+where+` GROUP BY model ORDER BY SUM(cost_usd) DESC`, args...,
+	)
+	if err != nil {
+		return res, fmt.Errorf("cost by model: %w", err)
+	}
+	defer rows.Close()
+	for rows.Next() {
+		var m CostByModel
+		if err := rows.Scan(&m.Model, &m.Calls, &m.CostUSD); err != nil {
+			return res, fmt.Errorf("scan cost by model: %w", err)
+		}
+		res.ByModel = append(res.ByModel, m)
+	}
+	return res, rows.Err()
+}

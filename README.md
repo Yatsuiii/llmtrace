@@ -208,7 +208,44 @@ detected 2 anomaly(ies)
 | `internal/correlate` | Deterministic anomaly-to-deploy matcher with additive lineage scoring. |
 | `internal/agent` | Gemini multi-turn tool-calling agent. Autonomous causal investigation. |
 | `internal/web` | Dashboard (Chart.js cost trend with deploy markers) and SSE investigation stream. |
+| `internal/api` | Read API for external integrations. `GET /api/cost` joins a session or time window to its LLM cost. |
 | `internal/seed` | Deterministic demo scenario seeder, reproducible with fixed RNG. |
+
+---
+
+## Integrations
+
+llmtrace exposes a small read API so other tools can join their own units of work
+to the LLM cost it recorded.
+
+### Cost by session or time window
+
+```
+GET /api/cost?session=<id>
+GET /api/cost?from=<RFC3339>&to=<RFC3339>
+GET /api/cost?session=<id>&from=...&to=...
+```
+
+Returns aggregated calls, tokens, and USD cost with a per-model breakdown:
+
+```json
+{
+  "session": "claude_code:claude-20260502-143021",
+  "calls": 3,
+  "input_tokens": 18020,
+  "output_tokens": 2828,
+  "cost_usd": 0.42,
+  "by_model": [{ "model": "claude-sonnet-4-6", "calls": 3, "cost_usd": 0.42 }]
+}
+```
+
+To make the session join exact, set `X-Llmtrace-Session: <your-session-id>` on
+requests through the proxy; every call is recorded against that id. Tools that
+only have timestamps can use the `from`/`to` window instead.
+
+This powers the [re_gent](https://github.com/regent-vcs/regent) integration:
+re_gent tracks what each agent step did, llmtrace says what it cost, joined on
+session id.
 
 ---
 

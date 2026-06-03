@@ -24,7 +24,9 @@ const anthropicUpstream = "https://api.anthropic.com/v1/messages"
 
 // Handler returns the proxy endpoint for POST /v1/messages. Callers send a
 // normal Anthropic request; the optional X-Llmtrace-Key header tags the call
-// with an inbound API key ID (defaults to "prod-frontend").
+// with an inbound API key ID (defaults to "prod-frontend"), and the optional
+// X-Llmtrace-Session header tags it with a caller-defined session id so the
+// call can later be joined back to a unit of work (e.g. a re_gent agent step).
 func Handler(db *storage.DB) http.HandlerFunc {
 	upstreamKey := os.Getenv("ANTHROPIC_API_KEY")
 	return func(w http.ResponseWriter, r *http.Request) {
@@ -46,6 +48,7 @@ func Handler(db *storage.DB) http.HandlerFunc {
 		if apiKeyID == "" {
 			apiKeyID = "prod-frontend"
 		}
+		sessionID := r.Header.Get("X-Llmtrace-Session")
 
 		upstream, err := http.NewRequestWithContext(r.Context(), http.MethodPost, anthropicUpstream, bytes.NewReader(reqBody))
 		if err != nil {
@@ -75,11 +78,11 @@ func Handler(db *storage.DB) http.HandlerFunc {
 		w.WriteHeader(resp.StatusCode)
 		w.Write(respBody)
 
-		recordCall(r.Context(), db, apiKeyID, reqBody, respBody, resp.StatusCode, latency)
+		recordCall(r.Context(), db, apiKeyID, sessionID, reqBody, respBody, resp.StatusCode, latency)
 	}
 }
 
-func recordCall(ctx context.Context, db *storage.DB, apiKeyID string, reqBody, respBody []byte, status int, latency time.Duration) {
+func recordCall(ctx context.Context, db *storage.DB, apiKeyID, sessionID string, reqBody, respBody []byte, status int, latency time.Duration) {
 	var parsed struct {
 		Model string `json:"model"`
 		Usage struct {
@@ -114,6 +117,7 @@ func recordCall(ctx context.Context, db *storage.DB, apiKeyID string, reqBody, r
 		LatencyMs:    latency.Milliseconds(),
 		Status:       status,
 		PromptHash:   promptFingerprint(reqBody),
+		SessionID:    sessionID,
 	}
 	if err := db.InsertCalls(ctx, []storage.CallRow{row}); err != nil {
 		log.Printf("proxy: insert call record: %v", err)

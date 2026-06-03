@@ -208,44 +208,65 @@ detected 2 anomaly(ies)
 | `internal/correlate` | Deterministic anomaly-to-deploy matcher with additive lineage scoring. |
 | `internal/agent` | Gemini multi-turn tool-calling agent. Autonomous causal investigation. |
 | `internal/web` | Dashboard (Chart.js cost trend with deploy markers) and SSE investigation stream. |
-| `internal/api` | Read API for external integrations. `GET /api/cost` joins a session or time window to its LLM cost. |
+| `internal/api` | Read API for external integrations. `GET /api/attribution` joins a commit SHA to its deploy + cost attribution; `GET /api/cost` joins a session or time window to its LLM cost. |
 | `internal/seed` | Deterministic demo scenario seeder, reproducible with fixed RNG. |
 
 ---
 
 ## Integrations
 
-llmtrace exposes a small read API so other tools can join their own units of work
-to the LLM cost it recorded.
+llmtrace exposes a small read API so other tools can join their own work to the
+cost and deploy attribution llmtrace recorded.
+
+### Attribution by commit SHA
+
+```
+GET /api/attribution?sha=<commit-sha>
+```
+
+Given the git commit a change shipped under, returns the deploy of that commit
+and any cost or latency anomaly the correlator attributes to it, with confidence
+and evidence:
+
+```json
+{
+  "sha": "c4e2117",
+  "matched": true,
+  "deploy": {
+    "id": "gha-2-summary-sonnet",
+    "pr_number": 2,
+    "title": "switch summary endpoint to claude-sonnet",
+    "commit_sha": "c4e2117a8b1f"
+  },
+  "attribution": {
+    "metric": "daily_cost", "date": "2026-05-26",
+    "baseline": 4.68, "actual": 12.92, "delta": 8.24, "sigma": 28.0,
+    "confidence": 0.55,
+    "evidence": [
+      { "kind": "model_change",
+        "description": "dominant model shifted from claude-haiku to claude-sonnet (87% of post-deploy calls)" }
+    ]
+  }
+}
+```
+
+This is the join key for the [re_gent](https://github.com/regent-vcs/regent)
+integration ([#1](https://github.com/Yatsuiii/llmtrace/issues/1)). re_gent owns
+the authoring layer (which agent turn wrote which code, under which commit);
+llmtrace owns the runtime layer (which deploy moved the bill). Stamp the git HEAD
+a step produced, query it here, and a runtime cost spike walks back to the exact
+turn that caused it. Short or full SHAs both match.
 
 ### Cost by session or time window
 
 ```
 GET /api/cost?session=<id>
 GET /api/cost?from=<RFC3339>&to=<RFC3339>
-GET /api/cost?session=<id>&from=...&to=...
 ```
 
-Returns aggregated calls, tokens, and USD cost with a per-model breakdown:
-
-```json
-{
-  "session": "claude_code:claude-20260502-143021",
-  "calls": 3,
-  "input_tokens": 18020,
-  "output_tokens": 2828,
-  "cost_usd": 0.42,
-  "by_model": [{ "model": "claude-sonnet-4-6", "calls": 3, "cost_usd": 0.42 }]
-}
-```
-
-To make the session join exact, set `X-Llmtrace-Session: <your-session-id>` on
-requests through the proxy; every call is recorded against that id. Tools that
-only have timestamps can use the `from`/`to` window instead.
-
-This powers the [re_gent](https://github.com/regent-vcs/regent) integration:
-re_gent tracks what each agent step did, llmtrace says what it cost, joined on
-session id.
+Aggregates calls, tokens, and USD cost (per-model) for a session id or a time
+window. Set `X-Llmtrace-Session: <id>` on proxied requests to tag calls for an
+exact session join.
 
 ---
 

@@ -31,6 +31,7 @@ func Serve(ctx context.Context, db *storage.DB, port int, w *watcher.Watcher) er
 	mux.HandleFunc("/ingest/call", ingest.CallHandler(db))
 	mux.HandleFunc("/ingest/deploy", ingest.DeployHandler(db))
 	mux.HandleFunc("/api/cost", api.CostHandler(db))
+	mux.HandleFunc("/api/attribution", api.AttributionHandler(db))
 	mux.HandleFunc("/v1/messages", proxy.Handler(db))
 
 	addr := fmt.Sprintf(":%d", port)

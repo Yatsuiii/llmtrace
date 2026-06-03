@@ -422,9 +422,9 @@ func sparkSVG(points []float64, hot bool) template.HTML {
 		}
 		fmt.Fprintf(&b, "%.1f,%.1f", x, y)
 	}
-	color := "#1d9a4a"
+	color := "#8a7340"
 	if hot {
-		color = "#ff4d4d"
+		color = "#d9534a"
 	}
 	return template.HTML(fmt.Sprintf(
 		`<svg class="spark" width="90" height="26" viewBox="0 0 90 26"><polyline fill="none" stroke="%s" stroke-width="1.5" points="%s"/></svg>`,
@@ -433,8 +433,8 @@ func sparkSVG(points []float64, hot bool) template.HTML {
 
 var keyColors = map[string]string{
 	"prod-frontend":   "#ffb000",
-	"internal-tools":  "#2f7d4e",
-	"background-jobs": "#5b6178",
+	"internal-tools":  "#d39b3c",
+	"background-jobs": "#6b6258",
 }
 
 func buildChartJSON(daily []storage.KeyDailyCost, deploys []storage.DeployRow) (string, error) {
@@ -480,7 +480,7 @@ func buildChartJSON(daily []storage.KeyDailyCost, deploys []storage.DeployRow) (
 	for _, k := range keys {
 		color, ok := keyColors[k]
 		if !ok {
-			color = "#4a4f5a"
+			color = "#6a5d44"
 		}
 		var pts []float64
 		for _, lbl := range labels {
@@ -527,7 +527,7 @@ func buildChartJSON(daily []storage.KeyDailyCost, deploys []storage.DeployRow) (
 		a.Type = "line"
 		a.XMin = date
 		a.XMax = date
-		a.BorderColor = "#ff4d4d"
+		a.BorderColor = "#d9534a"
 		a.BorderWidth = 2
 		a.BorderDash = []int{6, 4}
 		a.Label.Display = true
@@ -536,8 +536,8 @@ func buildChartJSON(daily []storage.KeyDailyCost, deploys []storage.DeployRow) (
 		} else {
 			a.Label.Content = fmt.Sprintf("%d deploys", n)
 		}
-		a.Label.BackgroundColor = "#ff4d4d22"
-		a.Label.Color = "#ff9b9b"
+		a.Label.BackgroundColor = "#d9534a22"
+		a.Label.Color = "#e0938b"
 		a.Label.Font.Size = 11
 		a.Label.Position = "start"
 		annotations[fmt.Sprintf("deploy%d", i)] = a

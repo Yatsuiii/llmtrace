@@ -17,6 +17,7 @@ import (
 	"github.com/Yatsuiii/llmtrace/internal/detect"
 	"github.com/Yatsuiii/llmtrace/internal/ingest"
 	"github.com/Yatsuiii/llmtrace/internal/proxy"
+	"github.com/Yatsuiii/llmtrace/internal/providers"
 	"github.com/Yatsuiii/llmtrace/internal/storage"
 	"github.com/Yatsuiii/llmtrace/internal/watcher"
 )
@@ -32,7 +33,8 @@ func Serve(ctx context.Context, db *storage.DB, port int, w *watcher.Watcher) er
 	mux.HandleFunc("/ingest/deploy", ingest.DeployHandler(db))
 	mux.HandleFunc("/api/cost", api.CostHandler(db))
 	mux.HandleFunc("/api/attribution", api.AttributionHandler(db))
-	mux.HandleFunc("/v1/messages", proxy.Handler(db))
+	mux.HandleFunc("/v1/messages", proxy.Handler(db, providers.NewAnthropic(""), os.Getenv("ANTHROPIC_API_KEY")))
+	mux.HandleFunc("/v1/chat/completions", proxy.Handler(db, providers.NewOpenAI(""), os.Getenv("OPENAI_API_KEY")))
 
 	addr := fmt.Sprintf(":%d", port)
 	fmt.Printf("llmtrace dashboard → http://localhost%s\n", addr)

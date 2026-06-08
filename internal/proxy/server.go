@@ -1,6 +1,8 @@
-// Package proxy is a reverse proxy for the Anthropic Messages API. It forwards
-// requests upstream untouched and records real token usage, cost, and latency
-// for every call into the ledger — this is how llmtrace gets real telemetry.
+// Package proxy is a provider-agnostic reverse proxy. It forwards requests to
+// an upstream LLM provider, records token usage, cost, and latency into the
+// ledger, and returns the upstream response unchanged. The optional
+// X-Llmtrace-Key header tags the call with an inbound API key ID (defaults to
+// "prod-frontend"); X-Llmtrace-Session tags it with a caller-defined session id.
 package proxy
 
 import (
@@ -9,33 +11,28 @@ import (
 	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
+	"fmt"
 	"io"
 	"log"
 	"net/http"
-	"os"
 	"strings"
 	"time"
 
 	"github.com/Yatsuiii/llmtrace/internal/pricing"
+	"github.com/Yatsuiii/llmtrace/internal/providers"
 	"github.com/Yatsuiii/llmtrace/internal/storage"
 )
 
-const anthropicUpstream = "https://api.anthropic.com/v1/messages"
-
-// Handler returns the proxy endpoint for POST /v1/messages. Callers send a
-// normal Anthropic request; the optional X-Llmtrace-Key header tags the call
-// with an inbound API key ID (defaults to "prod-frontend"), and the optional
-// X-Llmtrace-Session header tags it with a caller-defined session id so the
-// call can later be joined back to a unit of work (e.g. a re_gent agent step).
-func Handler(db *storage.DB) http.HandlerFunc {
-	upstreamKey := os.Getenv("ANTHROPIC_API_KEY")
+// Handler returns an http.HandlerFunc that proxies the given provider. upstreamKey
+// is the plaintext API key to forward; the handler returns 503 if it is empty.
+func Handler(db *storage.DB, p providers.Provider, upstreamKey string) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		if r.Method != http.MethodPost {
 			http.Error(w, "POST only", http.StatusMethodNotAllowed)
 			return
 		}
 		if upstreamKey == "" {
-			http.Error(w, "ANTHROPIC_API_KEY not configured on llmtrace", http.StatusServiceUnavailable)
+			http.Error(w, fmt.Sprintf("%s API key not configured on llmtrace", p.Name()), http.StatusServiceUnavailable)
 			return
 		}
 		reqBody, err := io.ReadAll(r.Body)
@@ -50,14 +47,23 @@ func Handler(db *storage.DB) http.HandlerFunc {
 		}
 		sessionID := r.Header.Get("X-Llmtrace-Session")
 
-		upstream, err := http.NewRequestWithContext(r.Context(), http.MethodPost, anthropicUpstream, bytes.NewReader(reqBody))
+		upstreamURL := p.UpstreamURL() + r.URL.Path
+		if r.URL.RawQuery != "" {
+			upstreamURL += "?" + r.URL.RawQuery
+		}
+		upstream, err := http.NewRequestWithContext(r.Context(), http.MethodPost, upstreamURL, bytes.NewReader(reqBody))
 		if err != nil {
 			http.Error(w, err.Error(), http.StatusInternalServerError)
 			return
 		}
-		upstream.Header.Set("x-api-key", upstreamKey)
-		upstream.Header.Set("anthropic-version", "2023-06-01")
+		p.SetAuth(upstream, upstreamKey)
 		upstream.Header.Set("content-type", "application/json")
+		// Pass through provider-specific version headers from the caller.
+		if v := r.Header.Get("anthropic-version"); v != "" {
+			upstream.Header.Set("anthropic-version", v)
+		} else if p.Name() == "anthropic" {
+			upstream.Header.Set("anthropic-version", "2023-06-01")
+		}
 
 		start := time.Now()
 		resp, err := http.DefaultClient.Do(upstream)
@@ -73,47 +79,38 @@ func Handler(db *storage.DB) http.HandlerFunc {
 		}
 		latency := time.Since(start)
 
-		// Return the upstream response unchanged.
 		w.Header().Set("Content-Type", "application/json")
 		w.WriteHeader(resp.StatusCode)
 		w.Write(respBody)
 
-		recordCall(r.Context(), db, apiKeyID, sessionID, reqBody, respBody, resp.StatusCode, latency)
+		go recordCall(context.Background(), db, p, apiKeyID, sessionID, r.URL.Path, reqBody, respBody, resp.StatusCode, latency)
 	}
 }
 
-func recordCall(ctx context.Context, db *storage.DB, apiKeyID, sessionID string, reqBody, respBody []byte, status int, latency time.Duration) {
-	var parsed struct {
-		Model string `json:"model"`
-		Usage struct {
-			InputTokens  int `json:"input_tokens"`
-			OutputTokens int `json:"output_tokens"`
-		} `json:"usage"`
+func recordCall(ctx context.Context, db *storage.DB, p providers.Provider, apiKeyID, sessionID, endpoint string, reqBody, respBody []byte, status int, latency time.Duration) {
+	usage, err := p.ParseUsage(nil, respBody)
+	if err != nil {
+		log.Printf("proxy: parse usage (%s): %v", p.Name(), err)
 	}
-	if err := json.Unmarshal(respBody, &parsed); err != nil {
-		log.Printf("proxy: parse response body: %v", err)
-	}
-
-	model := parsed.Model
-	if model == "" {
+	// Fall back to request body for model name if response didn't include it.
+	if usage.Model == "" {
 		var req struct {
 			Model string `json:"model"`
 		}
-		if err := json.Unmarshal(reqBody, &req); err != nil {
-			log.Printf("proxy: parse request body: %v", err)
+		if err := json.Unmarshal(reqBody, &req); err == nil {
+			usage.Model = req.Model
 		}
-		model = req.Model
 	}
-	in, out := parsed.Usage.InputTokens, parsed.Usage.OutputTokens
+
 	row := storage.CallRow{
 		Timestamp:    time.Now().UTC(),
 		APIKeyID:     apiKeyID,
-		Provider:     "anthropic",
-		Model:        model,
-		Endpoint:     "/v1/messages",
-		InputTokens:  in,
-		OutputTokens: out,
-		CostUSD:      pricing.Cost(model, in, out),
+		Provider:     p.Name(),
+		Model:        usage.Model,
+		Endpoint:     endpoint,
+		InputTokens:  usage.InputTokens,
+		OutputTokens: usage.OutputTokens,
+		CostUSD:      pricing.Cost(usage.Model, usage.InputTokens, usage.OutputTokens),
 		LatencyMs:    latency.Milliseconds(),
 		Status:       status,
 		PromptHash:   promptFingerprint(reqBody),
@@ -125,8 +122,10 @@ func recordCall(ctx context.Context, db *storage.DB, apiKeyID, sessionID string,
 }
 
 // promptFingerprint derives a stable hash from the model, system prompt, and
-// first user message — the same call pattern produces the same fingerprint.
+// first user message — same call pattern produces the same fingerprint regardless
+// of provider.
 func promptFingerprint(reqBody []byte) string {
+	// Handles both Anthropic (messages[].content string) and OpenAI (messages[].content string).
 	var req struct {
 		Model    string `json:"model"`
 		System   any    `json:"system"`
@@ -136,7 +135,7 @@ func promptFingerprint(reqBody []byte) string {
 		} `json:"messages"`
 	}
 	if err := json.Unmarshal(reqBody, &req); err != nil {
-		log.Printf("proxy: parse request for fingerprint: %v", err)
+		return ""
 	}
 
 	var sb strings.Builder

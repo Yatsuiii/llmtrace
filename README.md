@@ -109,7 +109,19 @@ The wedge in one sentence: *deploy-causal observability for AI agents, with zero
 
 ## Quickstart
 
-### Docker (Cloud Run or any host)
+### Install
+
+**Pre-built binary** (Linux, macOS, Windows — amd64 and arm64):
+
+Download from [GitHub Releases](https://github.com/Yatsuiii/llmtrace/releases/latest).
+
+**Go install** (requires Go 1.22+):
+
+```bash
+go install github.com/Yatsuiii/llmtrace/cmd/llmtrace@latest
+```
+
+**Docker** (Cloud Run or any host):
 
 ```bash
 git clone https://github.com/Yatsuiii/llmtrace.git
@@ -138,6 +150,38 @@ go run ./cmd/llmtrace seed                # seed 30 days of demo data
 GEMINI_API_KEY=xxx go run ./cmd/llmtrace serve
 # open http://localhost:8080
 ```
+
+### Point your app at llmtrace
+
+llmtrace is a drop-in proxy. One line change in your existing code:
+
+**Python (Anthropic):**
+```python
+client = anthropic.Anthropic(
+    base_url="http://localhost:8080",  # was api.anthropic.com
+    api_key="your-key",
+    default_headers={"X-Llmtrace-Key": "prod-frontend"},
+)
+```
+
+**Python (OpenAI):**
+```python
+client = OpenAI(
+    base_url="http://localhost:8080/v1",  # was api.openai.com/v1
+    api_key="your-key",
+    default_headers={"X-Llmtrace-Key": "prod-frontend"},
+)
+```
+
+**Node.js (Anthropic):**
+```js
+const client = new Anthropic({
+    baseURL: "http://localhost:8080",
+    defaultHeaders: { "X-Llmtrace-Key": "prod-frontend" },
+});
+```
+
+Full working examples in [`examples/`](examples/).
 
 ---
 

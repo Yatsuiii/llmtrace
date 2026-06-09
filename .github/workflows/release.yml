@@ -1,0 +1,39 @@
+name: release
+
+on:
+  push:
+    tags:
+      - "v*"
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-go@v5
+        with:
+          go-version: "1.25"
+
+      - name: build binaries
+        run: |
+          mkdir -p dist
+          for OS in linux darwin windows; do
+            for ARCH in amd64 arm64; do
+              EXT=""
+              [ "$OS" = "windows" ] && EXT=".exe"
+              OUTPUT="dist/llmtrace_${OS}_${ARCH}${EXT}"
+              GOOS=$OS GOARCH=$ARCH go build -ldflags="-s -w -X main.version=${{ github.ref_name }}" \
+                -o "$OUTPUT" ./cmd/llmtrace
+              echo "built $OUTPUT"
+            done
+          done
+
+      - name: create release
+        uses: softprops/action-gh-release@v2
+        with:
+          files: dist/*
+          generate_release_notes: true
